@@ -50,7 +50,7 @@ def _api_key() -> str:
     return os.getenv("OPENROUTER_API_KEY", "")
 
 
-def transcribe_audio(audio_bytes: bytes, audio_format: str = "webm") -> dict:
+def transcribe_audio(audio_bytes: bytes, audio_format: str = "webm", language: str = "") -> dict:
     """
     Transcribe audio using OpenRouter Whisper.
     Returns { text, language, language_name }.
@@ -71,6 +71,8 @@ def transcribe_audio(audio_bytes: bytes, audio_format: str = "webm") -> dict:
             "format": fmt,
         },
     }
+    if language and len(language) >= 2:
+        payload["language"] = language[:2]
 
     try:
         resp = requests.post(
@@ -96,7 +98,8 @@ def transcribe_audio(audio_bytes: bytes, audio_format: str = "webm") -> dict:
             }
         data = resp.json()
         text = (data.get("text") or "").strip()
-        lang = (data.get("language") or _detect_lang_from_text(text) or "en").lower()[:2]
+        lang = (language[:2] if language else None) or data.get("language") or _detect_lang_from_text(text) or "en"
+        lang = lang.lower()[:2]
         return {
             "text": text,
             "language": lang,
@@ -138,15 +141,38 @@ def _gtts_speech(text: str, lang: str) -> Optional[bytes]:
         code = GTTS_LANG_MAP.get(lang, lang)
         supported = tts_langs()
         if code not in supported:
-            # try base code without region
-            if code.split("-")[0] not in supported:
+            base = code.split("-")[0]
+            if base not in supported:
                 return None
-            code = code.split("-")[0]
+            code = base
 
-        buf = io.BytesIO()
-        gTTS(text=text, lang=code, slow=False).write_to_fp(buf)
-        data = buf.getvalue()
-        return data if len(data) > 500 else None
+        # gTTS chokes on very long text — chunk and concatenate MP3
+        chunks: list[str] = []
+        remaining = text.strip()
+        max_len = 400
+        while remaining:
+            if len(remaining) <= max_len:
+                chunks.append(remaining)
+                break
+            cut = remaining.rfind(" ", 0, max_len)
+            if cut < max_len // 2:
+                cut = max_len
+            chunks.append(remaining[:cut].strip())
+            remaining = remaining[cut:].strip()
+
+        parts: list[bytes] = []
+        for piece in chunks:
+            if not piece:
+                continue
+            buf = io.BytesIO()
+            gTTS(text=piece, lang=code, slow=False).write_to_fp(buf)
+            data = buf.getvalue()
+            if len(data) > 200:
+                parts.append(data)
+
+        if not parts:
+            return None
+        return b"".join(parts)
     except Exception:
         return None
 

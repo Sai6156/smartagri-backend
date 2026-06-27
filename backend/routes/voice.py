@@ -3,7 +3,7 @@ Voice routes — STT, TTS, voice chat via OpenRouter.
 """
 
 import io
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -44,8 +44,11 @@ async def detect_lang(req: DetectLangRequest):
 
 
 @router.post("/stt")
-async def speech_to_text(file: UploadFile = File(...)):
-    """Transcribe uploaded audio. Auto-detects language."""
+async def speech_to_text(
+    file: UploadFile = File(...),
+    language: str = Form(""),
+):
+    """Transcribe uploaded audio. Uses language hint when provided."""
     audio_bytes = await file.read()
     if len(audio_bytes) < 100:
         raise HTTPException(status_code=400, detail="Audio too short.")
@@ -53,7 +56,8 @@ async def speech_to_text(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="Audio too large (max 10MB).")
 
     ext = (file.filename or "audio.webm").rsplit(".", 1)[-1].lower()
-    result = transcribe_audio(audio_bytes, ext)
+    lang_hint = language.strip().lower()[:2] if language else ""
+    result = transcribe_audio(audio_bytes, ext, lang_hint)
 
     if result.get("error") and not result.get("text"):
         raise HTTPException(status_code=502, detail=f"STT failed: {result['error']}")

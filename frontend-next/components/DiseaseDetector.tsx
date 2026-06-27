@@ -2,11 +2,12 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { api, PredictResult } from "@/lib/api";
 import { TTSPlayer } from "@/lib/speech";
-import { MicRecorder, voiceTurn, speakText, stopAudio } from "@/lib/voiceApi";
+import { MicRecorder, BrowserMicSession, voiceTurnBrowser, speakText, stopAudio } from "@/lib/voiceApi";
+import { LANGUAGES } from "@/lib/languages";
 import PageHeader from "@/components/PageHeader";
 import DashboardStats from "@/components/DashboardStats";
 import {
-  Upload, Loader2, Volume2, Mic, MicOff,
+  Upload, Loader2, Volume2, Mic,
   Play, Pause, StopCircle, MessageCircle, X, RefreshCw,
   ImageIcon, Scan, Zap, Target, Lightbulb,
 } from "lucide-react";
@@ -34,20 +35,29 @@ export default function DiseaseDetector({ lang, speechLang, userName }: Props) {
   const [explanation, setExplanation]   = useState("");
   const [explainLoading, setExplainLoading] = useState(false);
 
-  // Voice conversation state (OpenRouter STT/TTS — any language)
+  // Voice conversation
   const micRef        = useRef<MicRecorder | null>(null);
-  const [voiceActive, setVoiceActive]   = useState(false);
-  const [voicePaused, setVoicePaused]   = useState(false);
-  const [listening,   setListening]     = useState(false);
-  const [processing,  setProcessing]    = useState(false);
-  const [voiceLang,   setVoiceLang]     = useState("");
-  const [voiceLangName, setVoiceLangName] = useState("");
-  const [voiceHistory, setVoiceHistory] = useState<{ role: string; content: string }[]>([]);
+  const browserMicRef = useRef<BrowserMicSession | null>(null);
+  const [voiceActive, setVoiceActive]       = useState(false);
+  const [speakLang, setSpeakLang]         = useState(lang);
+  const [listening,   setListening]         = useState(false);
+  const [processing,  setProcessing]        = useState(false);
+  const [voiceSpeaking, setVoiceSpeaking] = useState(false);
+  const [voiceHistory, setVoiceHistory]     = useState<{ role: string; content: string }[]>([]);
+  const [voiceError, setVoiceError]         = useState("");
+
+  useEffect(() => { setSpeakLang(lang); }, [lang]);
 
   useEffect(() => {
     ttsRef.current = new TTSPlayer();
     micRef.current = new MicRecorder();
-    return () => { ttsRef.current?.stop(); micRef.current?.cancel(); stopAudio(); };
+    browserMicRef.current = new BrowserMicSession();
+    return () => {
+      ttsRef.current?.stop();
+      micRef.current?.cancel();
+      browserMicRef.current?.cancel();
+      stopAudio();
+    };
   }, []);
 
   function handleFile(f: File) {
@@ -148,113 +158,85 @@ export default function DiseaseDetector({ lang, speechLang, userName }: Props) {
     );
   }, [result]);
 
-  async function processRecording(blob: Blob) {
-    setProcessing(true);
+  async function playReply(text: string) {
+    setVoiceSpeaking(true);
     try {
-      const turn = await voiceTurn(blob, voiceHistory, buildVoiceContext(), voiceLang || undefined, lang);
-      if (!voiceLang) {
-        setVoiceLang(turn.language);
-        setVoiceLangName(turn.language_name);
-      }
+      await speakText(text, speakLang);
+    } finally {
+      setVoiceSpeaking(false);
+    }
+  }
+
+  async function processTurn(getUserText: () => Promise<string>) {
+    setProcessing(true);
+    setVoiceError("");
+    try {
+      const turn = await voiceTurnBrowser(speakLang, voiceHistory, buildVoiceContext(), getUserText);
       const newHistory = [
         ...voiceHistory,
         { role: "user", content: turn.userText },
         { role: "assistant", content: turn.reply },
       ];
       setVoiceHistory(newHistory);
-
-      if (!voicePaused) {
-        await speakText(turn.reply, turn.language, () => {
-          if (!voicePaused && voiceActive) startListening();
-        });
-      }
+      await playReply(turn.reply);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Voice processing failed";
-      if (!voicePaused) {
-        const lang = voiceLang || "en";
-        await speakText(msg, lang).catch(() => {});
-      }
+      const msg = e instanceof Error ? e.message : "Voice failed";
+      setVoiceError(msg);
     } finally {
       setProcessing(false);
       setListening(false);
     }
   }
 
-  async function startListening() {
-    if (!micRef.current || voicePaused || processing) return;
+  function handleSpeak() {
+    if (listening || processing || voiceSpeaking) return;
     stopAudio();
     ttsRef.current?.stop();
-    try {
-      await micRef.current.start();
-      setListening(true);
-    } catch {
-      setListening(false);
+    setVoiceError("");
+
+    const browser = browserMicRef.current;
+    if (browser) {
+      try {
+        browser.start(speakLang);
+        setListening(true);
+        return;
+      } catch { /* fall through to recorder */ }
     }
+
+    micRef.current?.start().then(() => setListening(true)).catch(() => {
+      setVoiceError("Microphone access denied.");
+    });
   }
 
-  async function stopListeningAndProcess() {
-    if (!micRef.current?.isRecording) return;
+  async function handleStop() {
+    if (voiceSpeaking) {
+      stopAudio();
+      setVoiceSpeaking(false);
+      return;
+    }
+    if (!listening || !browserMicRef.current?.isListening) return;
+
     setListening(false);
-    try {
-      const blob = await micRef.current.stop();
-      await processRecording(blob);
-    } catch {
-      setProcessing(false);
-    }
+    await processTurn(() => browserMicRef.current!.stop());
   }
 
-  async function startVoiceConversation() {
+  function startVoiceConversation() {
     if (!result) return;
     setVoiceActive(true);
-    setVoicePaused(false);
     setVoiceHistory([]);
-    setVoiceLang("");
-    setVoiceLangName("");
-    const greetingLang = lang;
-    const greeting =
-      lang === "en"
-        ? `Hello ${userName || "Farmer"}! I analyzed your ${result.crop}. Ask me anything in your language.`
-        : `Hello! I detected ${result.display_name} on your ${result.crop}. Speak in your language.`;
-    try {
-      await speakText(greeting, greetingLang, () => {
-        if (!voicePaused) startListening();
-      });
-    } catch {
-      startListening();
-    }
-  }
-
-  function pauseVoice() {
-    setVoicePaused(true);
-    micRef.current?.cancel();
+    setVoiceError("");
     stopAudio();
-    ttsRef.current?.stop();
-    setListening(false);
-    setProcessing(false);
-  }
-
-  async function resumeVoice() {
-    setVoicePaused(false);
-    const langCode = voiceLang || lang;
-    try {
-      await speakText(
-        langCode === "en" ? "I'm back. Ask your question." : "Ready for your question.",
-        langCode,
-        () => startListening()
-      );
-    } catch {
-      startListening();
-    }
   }
 
   function endVoiceConversation() {
     setVoiceActive(false);
-    setVoicePaused(false);
     micRef.current?.cancel();
+    browserMicRef.current?.cancel();
     stopAudio();
     ttsRef.current?.stop();
     setListening(false);
     setProcessing(false);
+    setVoiceSpeaking(false);
   }
 
   return (
@@ -527,25 +509,49 @@ export default function DiseaseDetector({ lang, speechLang, userName }: Props) {
               {activeTab === "voice" && (
                 <div className="space-y-4">
                   {!voiceActive ? (
-                    <div className="text-center py-6">
-                      <MessageCircle className="w-10 h-10 text-gray-600 mx-auto mb-3" />
-                      <p className="text-gray-400 text-sm mb-4">
-                        Start a voice conversation about this detection.<br />
-                        Ask questions — I'll answer in your language.
+                    <div className="text-center py-6 space-y-4">
+                      <MessageCircle className="w-10 h-10 text-gray-600 mx-auto" />
+                      <p className="text-gray-400 text-sm">
+                        Pick your speaking language, then start the conversation.
                       </p>
+                      <div className="max-w-xs mx-auto text-left">
+                        <label className="text-xs text-gray-500 mb-1 block">I will speak in</label>
+                        <select
+                          value={speakLang}
+                          onChange={(e) => setSpeakLang(e.target.value)}
+                          className="input w-full text-sm"
+                        >
+                          {Object.entries(LANGUAGES).map(([code, name]) => (
+                            <option key={code} value={code}>{name}</option>
+                          ))}
+                        </select>
+                      </div>
                       <button
                         onClick={startVoiceConversation}
                         className="btn-primary flex items-center gap-2 mx-auto"
                       >
-                        <Mic className="w-4 h-4" /> Join the Conversation
+                        <Mic className="w-4 h-4" /> Start Voice Chat
                       </button>
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      {/* Status */}
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <label className="text-xs text-gray-500">Speaking language</label>
+                        <select
+                          value={speakLang}
+                          onChange={(e) => setSpeakLang(e.target.value)}
+                          disabled={listening || processing}
+                          className="input text-sm py-1.5 max-w-[200px]"
+                        >
+                          {Object.entries(LANGUAGES).map(([code, name]) => (
+                            <option key={code} value={code}>{name}</option>
+                          ))}
+                        </select>
+                      </div>
+
                       <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${
-                        voicePaused
-                          ? "bg-yellow-950/40 border border-yellow-800 text-yellow-300"
+                        voiceSpeaking
+                          ? "bg-purple-950/40 border border-purple-800 text-purple-300"
                           : processing
                           ? "bg-blue-950/40 border border-blue-800 text-blue-300"
                           : listening
@@ -553,54 +559,60 @@ export default function DiseaseDetector({ lang, speechLang, userName }: Props) {
                           : "bg-green-950/40 border border-green-800 text-green-300"
                       }`}>
                         <span className={`w-2 h-2 rounded-full ${
-                          voicePaused ? "bg-yellow-400" : processing ? "bg-blue-400 animate-pulse" : listening ? "bg-red-400 animate-pulse" : "bg-green-400"
+                          voiceSpeaking ? "bg-purple-400 animate-pulse"
+                          : processing ? "bg-blue-400 animate-pulse"
+                          : listening ? "bg-red-400 animate-pulse"
+                          : "bg-green-400"
                         }`} />
-                        {voicePaused ? "Paused — press Resume to continue" :
-                         processing ? "Processing your speech..." :
-                         listening    ? "Listening — tap mic when done" :
-                         voiceLangName ? `Ready — speak in ${voiceLangName}` : "Ready — speak in any language"}
+                        {voiceSpeaking ? "Playing reply… tap Stop to silence" :
+                         processing ? "Getting AI answer…" :
+                         listening ? `Listening in ${LANGUAGES[speakLang]}… tap Stop when done` :
+                         `Ready — tap Speak, then Stop (${LANGUAGES[speakLang]})`}
                       </div>
 
-                      {/* Conversation history */}
+                      {voiceError && (
+                        <p className="text-red-400 text-xs px-2">{voiceError}</p>
+                      )}
+
                       {voiceHistory.length > 0 && (
                         <div className="bg-gray-800 rounded-xl p-3 space-y-2 max-h-40 overflow-y-auto">
                           {voiceHistory.map((m, i) => (
-                            <div key={i} className={`text-xs ${
-                              m.role === "user" ? "text-blue-300" : "text-green-300"
-                            }`}>
+                            <div key={i} className={`text-xs ${m.role === "user" ? "text-blue-300" : "text-green-300"}`}>
                               <span className="font-semibold">{m.role === "user" ? "You" : "AI"}:</span> {m.content}
+                              {m.role === "assistant" && (
+                                <button
+                                  onClick={() => playReply(m.content)}
+                                  className="ml-2 text-gray-500 hover:text-green-400 inline-flex"
+                                  title="Play again"
+                                >
+                                  <Volume2 className="w-3 h-3" />
+                                </button>
+                              )}
                             </div>
                           ))}
                         </div>
                       )}
 
-                      {/* Controls */}
                       <div className="flex gap-2 justify-center flex-wrap">
-                        {!voicePaused ? (
-                          <>
-                            <button
-                              onClick={() => listening ? stopListeningAndProcess() : startListening()}
-                              disabled={processing}
-                              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
-                                listening
-                                  ? "bg-red-600 text-white animate-pulse"
-                                  : processing
-                                  ? "bg-gray-600 text-gray-300 cursor-wait"
-                                  : "bg-green-600 hover:bg-green-500 text-white"
-                              }`}
-                            >
-                              {listening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-                              {listening ? "Stop & Send" : processing ? "Processing..." : "Speak"}
-                            </button>
-                            <button onClick={pauseVoice} className="btn-secondary flex items-center gap-1.5 text-sm">
-                              <Pause className="w-4 h-4" /> Pause
-                            </button>
-                          </>
-                        ) : (
-                          <button onClick={resumeVoice} className="btn-primary flex items-center gap-2">
-                            <Play className="w-4 h-4" /> Resume
-                          </button>
-                        )}
+                        <button
+                          onClick={handleSpeak}
+                          disabled={listening || processing || voiceSpeaking}
+                          className="flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium text-sm bg-green-600 hover:bg-green-500 text-white disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          <Mic className="w-4 h-4" /> Speak
+                        </button>
+                        <button
+                          onClick={handleStop}
+                          disabled={!listening && !voiceSpeaking}
+                          className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium text-sm ${
+                            listening || voiceSpeaking
+                              ? "bg-red-600 hover:bg-red-500 text-white animate-pulse"
+                              : "bg-gray-700 text-gray-500 cursor-not-allowed"
+                          }`}
+                        >
+                          <StopCircle className="w-4 h-4" />
+                          {voiceSpeaking ? "Stop Audio" : "Stop"}
+                        </button>
                         <button onClick={endVoiceConversation} className="btn-secondary flex items-center gap-1.5 text-sm text-red-400">
                           <X className="w-4 h-4" /> End
                         </button>
