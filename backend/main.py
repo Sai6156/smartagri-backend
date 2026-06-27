@@ -68,6 +68,8 @@ async def root():
             "GET  /api/weather?lat=&lon=&source=owm|weatherapi|both",
             "GET  /api/weather/forecast?lat=&lon=&source=owm|weatherapi",
             "GET  /api/location/detect",
+            "GET  /api/location/reverse?lat=&lon=",
+            "GET  /api/location/search?q=",
             "POST /api/chat",
             "POST /api/report/generate",
             "POST /api/report/risk-forecast",

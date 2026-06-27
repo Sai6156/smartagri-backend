@@ -1,3 +1,5 @@
+import { reverseGeocodeFallback, searchCityFallback } from "@/lib/geocodeFallback";
+
 const BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
 
 function authHeader(): Record<string, string> {
@@ -87,15 +89,23 @@ export const api = {
 
   locationDetect: () => req<LocationData>("/api/location/detect"),
 
-  reverseGeocode: (lat: number, lon: number) =>
-    req<LocationData>(`/api/location/reverse?lat=${lat}&lon=${lon}`, {}, 30000),
+  reverseGeocode: async (lat: number, lon: number) => {
+    try {
+      return await req<LocationData>(`/api/location/reverse?lat=${lat}&lon=${lon}`, {}, 30000);
+    } catch {
+      return reverseGeocodeFallback(lat, lon);
+    }
+  },
 
-  searchCity: (q: string) =>
-    req<{ lat: number; lon: number; city: string; region: string; country: string; label: string }[]>(
-      `/api/location/search?q=${encodeURIComponent(q)}`,
-      {},
-      25000
-    ),
+  searchCity: async (q: string) => {
+    try {
+      return await req<
+        { lat: number; lon: number; city: string; region: string; country: string; label: string }[]
+      >(`/api/location/search?q=${encodeURIComponent(q)}`, {}, 25000);
+    } catch {
+      return searchCityFallback(q);
+    }
+  },
 
   // ── Plant ID ─────────────────────────────────────────────────────────
   identifyPlant: (file: File) => {

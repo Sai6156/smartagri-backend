@@ -66,8 +66,8 @@ export default function LocationBar() {
       const hits = await api.searchCity(query.trim());
       setResults(hits);
       if (!hits.length) setError("No cities found. Try e.g. Warangal, Telangana");
-    } catch {
-      setError("City search failed.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "City search failed.");
     } finally {
       setLoading(false);
       setStatus("");
