@@ -38,8 +38,62 @@ def _farming_alerts(temp: float, humidity: float, weather_main: str) -> list[str
 
 @router.get("/location/detect")
 async def detect_location():
-    """Auto-detect approximate location from server IP (ipinfo.io)."""
+    """Server-side IP geolocation (Render host IP — not the user's device). Prefer browser GPS on client."""
     return get_location_from_ip()
+
+
+@router.get("/location/reverse")
+async def reverse_geocode(
+    lat: float = Query(...),
+    lon: float = Query(...),
+):
+    """Reverse geocode lat/lon to city name via OpenWeather."""
+    key = os.getenv("OPENWEATHER_API_KEY", "")
+    if not key:
+        raise HTTPException(status_code=503, detail="OpenWeatherMap API key not configured.")
+    resp = requests.get(
+        "http://api.openweathermap.org/geo/1.0/reverse",
+        params={"lat": lat, "lon": lon, "limit": 1, "appid": key},
+        timeout=10,
+    )
+    if resp.status_code != 200 or not resp.json():
+        return {"lat": lat, "lon": lon, "city": "Your location", "region": "", "country": ""}
+    place = resp.json()[0]
+    return {
+        "lat": lat,
+        "lon": lon,
+        "city": place.get("name", "Your location"),
+        "region": place.get("state", ""),
+        "country": place.get("country", ""),
+    }
+
+
+@router.get("/location/search")
+async def search_city(q: str = Query(..., min_length=2)):
+    """Search city by name for manual location."""
+    key = os.getenv("OPENWEATHER_API_KEY", "")
+    if not key:
+        raise HTTPException(status_code=503, detail="OpenWeatherMap API key not configured.")
+    resp = requests.get(
+        "http://api.openweathermap.org/geo/1.0/direct",
+        params={"q": q, "limit": 6, "appid": key},
+        timeout=10,
+    )
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail="City search failed.")
+    return [
+        {
+            "lat": p["lat"],
+            "lon": p["lon"],
+            "city": p.get("name", q),
+            "region": p.get("state", ""),
+            "country": p.get("country", ""),
+            "label": ", ".join(
+                x for x in [p.get("name"), p.get("state"), p.get("country")] if x
+            ),
+        }
+        for p in resp.json()
+    ]
 
 
 @router.get("/weather")

@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { api, PredictResult } from "@/lib/api";
 import { TTSPlayer } from "@/lib/speech";
+import { loadUserLocation, getBrowserGps, saveUserLocation } from "@/lib/location";
 import { AlertTriangle, Loader2, Volume2 } from "lucide-react";
 
 const CROPS = ["Tomato", "Potato", "Pepper", "Corn", "Wheat", "Rice", "Apple", "Grape", "Strawberry", "Soybean"];
@@ -34,10 +35,31 @@ export default function RiskForecaster({ lang: _lang, speechLang }: Props) {
     return () => window.removeEventListener("sa-last-scan-updated", refresh);
   }, []);
 
+  async function resolveLocation() {
+    const saved = loadUserLocation();
+    if (saved) return saved;
+    try {
+      const { lat, lon } = await getBrowserGps();
+      const geo = await api.reverseGeocode(lat, lon);
+      const loc = {
+        lat,
+        lon,
+        city: geo.city || location || "Local",
+        region: geo.region,
+        country: geo.country,
+        source: "gps" as const,
+      };
+      saveUserLocation(loc);
+      return loc;
+    } catch {
+      return { lat: 17.38, lon: 78.46, city: location || "Hyderabad", region: "", country: "IN", source: "manual" as const };
+    }
+  }
+
   async function generate() {
     setLoading(true); setForecast("");
     try {
-      const loc = await api.locationDetect().catch(() => ({ lat: 17.38, lon: 78.46, city: location || "Local", region: "", country: "" }));
+      const loc = await resolveLocation();
       const res = await api.riskForecast(crop, loc.lat, loc.lon, location || loc.city);
       const context = scan?.result
         ? `Latest leaf scan context: dataset model predicted ${scan.result.display_name} (${scan.result.confidence.toFixed(1)}%). Gemma visual top possibility: ${scan.result.visual_diagnosis?.[0]?.disease || "not available"}.\n\n`

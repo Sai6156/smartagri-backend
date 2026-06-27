@@ -73,6 +73,14 @@ export const api = {
 
   locationDetect: () => req<LocationData>("/api/location/detect"),
 
+  reverseGeocode: (lat: number, lon: number) =>
+    req<LocationData>(`/api/location/reverse?lat=${lat}&lon=${lon}`),
+
+  searchCity: (q: string) =>
+    req<{ lat: number; lon: number; city: string; region: string; country: string; label: string }[]>(
+      `/api/location/search?q=${encodeURIComponent(q)}`
+    ),
+
   // ── Plant ID ─────────────────────────────────────────────────────────
   identifyPlant: (file: File) => {
     const fd = new FormData();
