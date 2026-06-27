@@ -1,13 +1,13 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 import { api, ChatMsg } from "@/lib/api";
-import { BrowserMicSession, voiceTurnBrowser, speakText, stopAudio } from "@/lib/voiceApi";
+import { VoiceListenSession, voiceTurnFromSession, speakText, stopAudio } from "@/lib/voiceApi";
 import { LANGUAGES } from "@/lib/languages";
 import { Send, Mic, StopCircle, Volume2, Loader2, Bot, User } from "lucide-react";
 
 interface Props { lang: string; speechLang: string; }
 
-export default function Chatbot({ lang, speechLang }: Props) {
+export default function Chatbot({ lang }: Props) {
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput]       = useState("");
   const [loading, setLoading]   = useState(false);
@@ -16,14 +16,14 @@ export default function Chatbot({ lang, speechLang }: Props) {
   const [voiceSpeaking, setVoiceSpeaking] = useState(false);
   const [speakLang, setSpeakLang] = useState(lang);
   const [voiceError, setVoiceError] = useState("");
-  const browserMic = useRef<BrowserMicSession | null>(null);
+  const listenRef = useRef<VoiceListenSession | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { setSpeakLang(lang); }, [lang]);
 
   useEffect(() => {
-    browserMic.current = new BrowserMicSession();
-    return () => { browserMic.current?.cancel(); stopAudio(); };
+    listenRef.current = new VoiceListenSession();
+    return () => { listenRef.current?.cancel(); stopAudio(); };
   }, []);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
@@ -56,15 +56,15 @@ export default function Chatbot({ lang, speechLang }: Props) {
     }
   }
 
-  function handleSpeak() {
+  async function handleSpeak() {
     if (listening || processing || voiceSpeaking || loading) return;
     stopAudio();
     setVoiceError("");
     try {
-      browserMic.current?.start(speakLang);
+      await listenRef.current!.start(speakLang);
       setListening(true);
-    } catch (e: unknown) {
-      setVoiceError(e instanceof Error ? e.message : "Mic not available");
+    } catch {
+      setVoiceError("Microphone access denied. Allow mic in browser settings.");
     }
   }
 
@@ -74,25 +74,22 @@ export default function Chatbot({ lang, speechLang }: Props) {
       setVoiceSpeaking(false);
       return;
     }
-    if (!listening || !browserMic.current?.isListening) return;
+    if (!listening || !listenRef.current?.isActive) return;
 
-    setListening(false);
     setProcessing(true);
     setVoiceError("");
     try {
-      const turn = await voiceTurnBrowser(
-        speakLang,
-        messages,
-        "",
-        () => browserMic.current!.stop()
-      );
+      const result = await listenRef.current.stop();
+      setListening(false);
+      const turn = await voiceTurnFromSession(speakLang, messages, "", result);
       const userMsg: ChatMsg = { role: "user", content: turn.userText };
       const history = [...messages, userMsg];
       setMessages([...history, { role: "assistant", content: turn.reply }]);
       await playReply(turn.reply);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Voice failed";
-      setVoiceError(msg);
+      setListening(false);
+      setVoiceError(e instanceof Error ? e.message : "Voice failed");
+      listenRef.current?.cancel();
     } finally {
       setProcessing(false);
     }
@@ -106,7 +103,7 @@ export default function Chatbot({ lang, speechLang }: Props) {
         <div className="flex items-center justify-between gap-2 mb-4 flex-shrink-0 flex-wrap">
           <div>
             <h2 className="font-semibold text-white">AI Farming Assistant</h2>
-            <p className="text-xs text-gray-500">Speak → Stop to ask by voice</p>
+            <p className="text-xs text-gray-500">Tap Speak → talk → tap Stop</p>
           </div>
           <div className="flex items-center gap-2">
             <label className="text-xs text-gray-500">Speak in</label>
@@ -180,7 +177,6 @@ export default function Chatbot({ lang, speechLang }: Props) {
             onClick={handleSpeak}
             disabled={listening || processing || voiceSpeaking || loading}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm font-medium disabled:opacity-40"
-            title="Start speaking"
           >
             <Mic className="w-4 h-4" /> Speak
           </button>
@@ -190,12 +186,10 @@ export default function Chatbot({ lang, speechLang }: Props) {
             className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium ${
               listening || voiceSpeaking
                 ? "bg-red-600 hover:bg-red-500 text-white animate-pulse"
-                : "bg-gray-700 text-gray-500"
+                : "bg-gray-700 text-gray-500 cursor-not-allowed"
             }`}
-            title={voiceSpeaking ? "Stop audio" : "Stop and send"}
           >
-            <StopCircle className="w-4 h-4" />
-            {voiceSpeaking ? "Stop" : "Stop"}
+            <StopCircle className="w-4 h-4" /> Stop
           </button>
           <input
             className="input flex-1"
@@ -211,7 +205,7 @@ export default function Chatbot({ lang, speechLang }: Props) {
         </div>
         {(listening || voiceSpeaking) && (
           <p className="text-xs text-center mt-2 text-gray-500">
-            {voiceSpeaking ? "Playing reply…" : `Listening in ${LANGUAGES[speakLang]}…`}
+            {voiceSpeaking ? "Playing reply… tap Stop to silence" : `Listening (${LANGUAGES[speakLang]})… tap Stop when done`}
           </p>
         )}
       </div>

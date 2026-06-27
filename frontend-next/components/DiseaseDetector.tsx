@@ -2,7 +2,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { api, PredictResult } from "@/lib/api";
 import { TTSPlayer } from "@/lib/speech";
-import { MicRecorder, BrowserMicSession, voiceTurnBrowser, speakText, stopAudio } from "@/lib/voiceApi";
+import { VoiceListenSession, voiceTurnFromSession, speakText, stopAudio } from "@/lib/voiceApi";
 import { LANGUAGES } from "@/lib/languages";
 import PageHeader from "@/components/PageHeader";
 import DashboardStats from "@/components/DashboardStats";
@@ -36,8 +36,7 @@ export default function DiseaseDetector({ lang, speechLang, userName }: Props) {
   const [explainLoading, setExplainLoading] = useState(false);
 
   // Voice conversation
-  const micRef        = useRef<MicRecorder | null>(null);
-  const browserMicRef = useRef<BrowserMicSession | null>(null);
+  const listenRef     = useRef<VoiceListenSession | null>(null);
   const [voiceActive, setVoiceActive]       = useState(false);
   const [speakLang, setSpeakLang]         = useState(lang);
   const [listening,   setListening]         = useState(false);
@@ -50,12 +49,10 @@ export default function DiseaseDetector({ lang, speechLang, userName }: Props) {
 
   useEffect(() => {
     ttsRef.current = new TTSPlayer();
-    micRef.current = new MicRecorder();
-    browserMicRef.current = new BrowserMicSession();
+    listenRef.current = new VoiceListenSession();
     return () => {
       ttsRef.current?.stop();
-      micRef.current?.cancel();
-      browserMicRef.current?.cancel();
+      listenRef.current?.cancel();
       stopAudio();
     };
   }, []);
@@ -167,11 +164,11 @@ export default function DiseaseDetector({ lang, speechLang, userName }: Props) {
     }
   }
 
-  async function processTurn(getUserText: () => Promise<string>) {
+  async function processTurn(sessionResult: { text: string; blob: Blob | null }) {
     setProcessing(true);
     setVoiceError("");
     try {
-      const turn = await voiceTurnBrowser(speakLang, voiceHistory, buildVoiceContext(), getUserText);
+      const turn = await voiceTurnFromSession(speakLang, voiceHistory, buildVoiceContext(), sessionResult);
       const newHistory = [
         ...voiceHistory,
         { role: "user", content: turn.userText },
@@ -188,24 +185,17 @@ export default function DiseaseDetector({ lang, speechLang, userName }: Props) {
     }
   }
 
-  function handleSpeak() {
+  async function handleSpeak() {
     if (listening || processing || voiceSpeaking) return;
     stopAudio();
     ttsRef.current?.stop();
     setVoiceError("");
-
-    const browser = browserMicRef.current;
-    if (browser) {
-      try {
-        browser.start(speakLang);
-        setListening(true);
-        return;
-      } catch { /* fall through to recorder */ }
+    try {
+      await listenRef.current!.start(speakLang);
+      setListening(true);
+    } catch {
+      setVoiceError("Microphone access denied. Allow mic in browser settings.");
     }
-
-    micRef.current?.start().then(() => setListening(true)).catch(() => {
-      setVoiceError("Microphone access denied.");
-    });
   }
 
   async function handleStop() {
@@ -214,10 +204,17 @@ export default function DiseaseDetector({ lang, speechLang, userName }: Props) {
       setVoiceSpeaking(false);
       return;
     }
-    if (!listening || !browserMicRef.current?.isListening) return;
+    if (!listening || !listenRef.current?.isActive) return;
 
-    setListening(false);
-    await processTurn(() => browserMicRef.current!.stop());
+    try {
+      const result = await listenRef.current.stop();
+      setListening(false);
+      await processTurn(result);
+    } catch (e: unknown) {
+      setListening(false);
+      setVoiceError(e instanceof Error ? e.message : "Stop failed");
+      listenRef.current?.cancel();
+    }
   }
 
   function startVoiceConversation() {
@@ -230,8 +227,7 @@ export default function DiseaseDetector({ lang, speechLang, userName }: Props) {
 
   function endVoiceConversation() {
     setVoiceActive(false);
-    micRef.current?.cancel();
-    browserMicRef.current?.cancel();
+    listenRef.current?.cancel();
     stopAudio();
     ttsRef.current?.stop();
     setListening(false);
@@ -603,10 +599,12 @@ export default function DiseaseDetector({ lang, speechLang, userName }: Props) {
                         </button>
                         <button
                           onClick={handleStop}
-                          disabled={!listening && !voiceSpeaking}
+                          disabled={!listening && !voiceSpeaking && !processing}
                           className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium text-sm ${
                             listening || voiceSpeaking
                               ? "bg-red-600 hover:bg-red-500 text-white animate-pulse"
+                              : processing
+                              ? "bg-red-600/50 text-white cursor-wait"
                               : "bg-gray-700 text-gray-500 cursor-not-allowed"
                           }`}
                         >
