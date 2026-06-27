@@ -60,11 +60,11 @@ export const api = {
     }),
 
   // ── Chat ──────────────────────────────────────────────────────────────
-  chat: (message: string, history: ChatMsg[]) =>
+  chat: (message: string, history: ChatMsg[], context = "", lang = "en") =>
     req<{ reply: string; source: string }>("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message, history }),
+      body: JSON.stringify({ message, history, context, lang }),
     }),
 
   // ── Weather ──────────────────────────────────────────────────────────

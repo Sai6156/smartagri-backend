@@ -3,6 +3,7 @@
  */
 
 import { VoiceListenSession, SPEECH_LANG_MAP, TTSPlayer } from "@/lib/speech";
+import { stripMarkdownForSpeech } from "@/lib/scanContext";
 import { LANGUAGES } from "@/lib/languages";
 
 const BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
@@ -91,14 +92,15 @@ function browserSpeak(text: string, language: string, onEnd?: () => void): Promi
 }
 
 export async function speakText(text: string, language: string, onEnd?: () => void): Promise<void> {
-  if (!text.trim()) return;
+  const clean = stripMarkdownForSpeech(text);
+  if (!clean) return;
   stopAudio();
 
   try {
     const res = await fetch(`${BASE}/api/voice/tts`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...authHeader() },
-      body: JSON.stringify({ text, language }),
+      body: JSON.stringify({ text: clean, language }),
     });
     if (!res.ok) throw new Error("TTS API failed");
     const ct = res.headers.get("content-type") || "";
@@ -107,7 +109,7 @@ export async function speakText(text: string, language: string, onEnd?: () => vo
     if (blob.size < 500) throw new Error("Audio too small");
     await playAudioBlob(blob, onEnd);
   } catch {
-    await browserSpeak(text, language, onEnd);
+    await browserSpeak(clean, language, onEnd);
   }
 }
 

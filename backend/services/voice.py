@@ -209,6 +209,8 @@ def _openrouter_speech(text: str, lang: str) -> Optional[bytes]:
 
 def synthesize_speech(text: str, lang: str = "en") -> Optional[bytes]:
     """Generate speech MP3 in the given language. Reads the exact text aloud."""
+    from backend.services.llm import _strip_markdown
+    text = _strip_markdown(text)
     if not text.strip():
         return None
 
@@ -240,7 +242,8 @@ def voice_chat_reply(
         f"CRITICAL: The farmer is speaking in {lang_name} (code: {lang}). "
         f"You MUST reply entirely in {lang_name}. Do not use English unless the farmer spoke English.\n"
         "Give practical, actionable advice in 2-4 short sentences suitable for text-to-speech. "
-        "No markdown, no bullet points, plain spoken language.\n"
+        "Plain spoken language only: no markdown, no asterisks, no bullet points, no bold.\n"
+        "If scan context is provided, the farmer already uploaded their leaf — never ask for a photo.\n"
     )
     if context:
         system += f"\nContext from their crop scan:\n{context}\n"
@@ -250,7 +253,8 @@ def voice_chat_reply(
     messages.append({"role": "user", "content": message})
 
     result = chat_completion(messages, model=DEFAULT_MODEL, max_tokens=400, temperature=0.6)
-    return result or _fallback_reply(lang_name)
+    from backend.services.llm import _strip_markdown
+    return _strip_markdown(result) if result else _fallback_reply(lang_name)
 
 
 def _fallback_reply(lang_name: str) -> str:

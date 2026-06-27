@@ -36,12 +36,13 @@ RULE_BASED = {
 class ChatRequest(BaseModel):
     message: str
     history: list[dict] = []
+    context: str = ""
+    lang: str = "en"
 
 
 @router.post("/chat")
 async def chat(req: ChatRequest):
-    # Try LLM first
-    reply = answer_farming_question(req.message, req.history)
+    reply = answer_farming_question(req.message, req.history, req.context, req.lang)
     if reply:
         return {"reply": reply, "source": "openrouter"}
 

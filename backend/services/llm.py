@@ -13,6 +13,23 @@ DEFAULT_MODEL    = "google/gemma-4-31b-it:free"
 FAST_MODEL       = "google/gemma-4-31b-it:free"   # same — free tier is fast enough
 
 
+def _strip_markdown(text: str) -> str:
+    """Plain text for display and TTS — no asterisks read aloud."""
+    import re
+    if not text:
+        return ""
+    t = text
+    t = re.sub(r"\*\*([^*]+)\*\*", r"\1", t)
+    t = re.sub(r"\*([^*]+)\*", r"\1", t)
+    t = re.sub(r"__([^_]+)__", r"\1", t)
+    t = re.sub(r"_([^_]+)_", r"\1", t)
+    t = re.sub(r"#{1,6}\s+", "", t)
+    t = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", t)
+    t = re.sub(r"`([^`]+)`", r"\1", t)
+    t = re.sub(r"^[-*•]\s+", "", t, flags=re.MULTILINE)
+    return t.strip()
+
+
 def _headers() -> dict:
     key = os.getenv("OPENROUTER_API_KEY", "")
     return {
@@ -193,7 +210,12 @@ Format with markdown headers. Be specific to the crop and weather conditions."""
     return result or _fallback_risk(crop, humidity, temp)
 
 
-def answer_farming_question(question: str, history: list[dict]) -> str:
+def answer_farming_question(
+    question: str,
+    history: list[dict],
+    context: str = "",
+    lang: str = "en",
+) -> str:
     """Answer a farming question using OpenRouter."""
     system_prompt = (
         "You are SmartAgri Assistant, an expert agricultural advisor with deep knowledge of:\n"
@@ -204,14 +226,24 @@ def answer_farming_question(question: str, history: list[dict]) -> str:
         "- Weather impact on crop health\n"
         "- Organic and conventional farming practices\n\n"
         "Give practical, actionable advice in 3-5 sentences unless detailed explanation is needed. "
-        "Mention scientific names when relevant. Recommend safe pesticide handling practices."
+        "Mention scientific names when relevant. Recommend safe pesticide handling practices.\n"
+        "IMPORTANT: Use plain text only. No markdown, no asterisks, no bullet points, no bold.\n"
     )
+    if context.strip():
+        system_prompt += (
+            "\nThe farmer already analyzed their leaf. Use this scan data as ground truth. "
+            "Do NOT ask them to upload, attach, or describe a photo — they already did.\n"
+            f"{context.strip()}\n"
+        )
+    if lang and lang != "en":
+        system_prompt += f"\nReply in the user's language (code: {lang}).\n"
+
     messages = [{"role": "system", "content": system_prompt}]
     messages.extend(history[-6:])
     messages.append({"role": "user", "content": question})
 
     result = chat_completion(messages, max_tokens=500, temperature=0.7)
-    return result or ""
+    return _strip_markdown(result or "")
 
 
 def visual_disease_possibilities(
