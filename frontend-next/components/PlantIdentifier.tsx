@@ -1,16 +1,39 @@
-"use client";
-import { useState } from "react";
+﻿"use client";
+import { useEffect, useState } from "react";
 import { api, PlantIDResult } from "@/lib/api";
-import { Upload, Loader2, Leaf } from "lucide-react";
+import { Upload, Loader2, Leaf, Link as LinkIcon } from "lucide-react";
 
 interface Props { lang: string; }
 
+function dataUrlToFile(dataUrl: string, filename = "latest-leaf.jpg"): File {
+  const [header, data] = dataUrl.split(",");
+  const mime = header.match(/data:(.*?);/)?.[1] || "image/jpeg";
+  const bytes = atob(data);
+  const arr = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+  return new File([arr], filename, { type: mime });
+}
+
 export default function PlantIdentifier({ lang: _lang }: Props) {
-  const [file, setFile]       = useState<File | null>(null);
+  const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
-  const [result, setResult]   = useState<PlantIDResult | null>(null);
+  const [result, setResult] = useState<PlantIDResult | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState("");
+  const [error, setError] = useState("");
+  const [hasScanContext, setHasScanContext] = useState(false);
+
+  useEffect(() => {
+    const raw = localStorage.getItem("sa_last_scan");
+    if (!raw) return;
+    try {
+      const latest = JSON.parse(raw);
+      if (latest.imageUrl?.startsWith("data:")) {
+        setPreview(latest.imageUrl);
+        setFile(dataUrlToFile(latest.imageUrl));
+        setHasScanContext(true);
+      }
+    } catch {}
+  }, []);
 
   async function identify() {
     if (!file) return;
@@ -27,13 +50,28 @@ export default function PlantIdentifier({ lang: _lang }: Props) {
     <div className="max-w-2xl mx-auto space-y-4">
       <div className="card">
         <h2 className="font-semibold text-white mb-4">Plant Species Identifier</h2>
-        <p className="text-gray-500 text-sm mb-4">Upload a leaf or plant photo to identify the species using PlantNet AI.</p>
+        <p className="text-gray-500 text-sm mb-4">
+          This can reuse your latest Disease Detector image. You can still upload a different plant photo if needed.
+        </p>
+
+        {hasScanContext && (
+          <div className="bg-green-950/30 border border-green-900 rounded-xl p-3 mb-4 text-green-200 text-sm flex items-center gap-2">
+            <LinkIcon className="w-4 h-4" /> Connected to latest leaf scan.
+          </div>
+        )}
 
         <label className="flex flex-col items-center justify-center border-2 border-dashed border-gray-700 hover:border-gray-600 rounded-xl cursor-pointer min-h-40 bg-gray-800/50 mb-4">
           <input type="file" accept="image/*" className="sr-only"
             onChange={(e) => {
               const f = e.target.files?.[0];
-              if (f) { setFile(f); setPreview(URL.createObjectURL(f)); setResult(null); }
+              if (f) {
+                setFile(f);
+                const reader = new FileReader();
+                reader.onload = () => setPreview(String(reader.result || ""));
+                reader.readAsDataURL(f);
+                setResult(null);
+                setHasScanContext(false);
+              }
             }} />
           {preview
             ? <img src={preview} alt="plant" className="max-h-36 rounded-lg object-contain" />
@@ -43,7 +81,7 @@ export default function PlantIdentifier({ lang: _lang }: Props) {
         {file && (
           <button onClick={identify} disabled={loading} className="btn-primary w-full flex items-center justify-center gap-2">
             {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-            {loading ? "Identifying..." : "Identify Plant"}
+            {loading ? "Identifying..." : hasScanContext ? "Identify Latest Scan Plant" : "Identify Plant"}
           </button>
         )}
         {error && <p className="text-red-400 text-sm mt-2">{error}</p>}

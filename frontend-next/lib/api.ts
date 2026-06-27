@@ -127,7 +127,18 @@ export interface PredictResult {
   fertilizers: string[];
   prevention: string;
   top5: { class: string; confidence: number }[];
+  visual_diagnosis: VisualDiagnosis[];
+  prediction_id?: number;
   user_id: string;
+}
+
+export interface VisualDiagnosis {
+  disease: string;
+  crop_if_visible: string;
+  type: string;
+  confidence: number;
+  visual_reason: string;
+  immediate_action: string;
 }
 
 export interface ExplainRequest {
@@ -184,9 +195,17 @@ export interface HistoryEntry {
   user_id: string;
   timestamp: string;
   crop: string;
+  class_name: string;
   display_name: string;
   confidence: number;
   severity: string;
+  remedies: string[];
+  fertilizers: string[];
+  prevention: string;
+  description: string;
+  top5: { class: string; confidence: number }[];
+  visual_diagnosis: VisualDiagnosis[];
+  report?: string;
 }
 
 export interface StatsData {

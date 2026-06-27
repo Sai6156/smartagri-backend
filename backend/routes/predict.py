@@ -4,6 +4,7 @@ from backend.services.disease_info import get_disease_info
 from backend.services.plantid_api import identify_disease
 from backend.services.plantnet_api import identify_plant as plantnet_identify
 from backend.services.translator import translate_disease_name, translate_label, translate_dynamic
+from backend.services.llm import visual_disease_possibilities
 from backend.db import save_prediction
 
 router = APIRouter(prefix="/api", tags=["prediction"])
@@ -40,6 +41,13 @@ async def predict_disease(
     class_name = result["class_name"]
     info       = get_disease_info(class_name)
 
+    # Gemma visual second opinion: independent from PlantVillage/dataset classes.
+    visual_diagnosis = visual_disease_possibilities(
+        image_bytes,
+        file.filename or "leaf.jpg",
+        model_prediction=info["display_name"],
+    )
+
     # Translate output if requested
     translated_name = translate_disease_name(info["display_name"], lang)
     remedies        = info["remedies"]
@@ -66,6 +74,7 @@ async def predict_disease(
         "fertilizers":    fertilizers,
         "prevention":     prevention,
         "top5":           result["top5"],
+        "visual_diagnosis": visual_diagnosis,
         "filename":       file.filename,
         "user_id":        user_id,
         "language":       lang,
@@ -84,7 +93,7 @@ async def predict_disease(
         plantid_result = identify_disease(image_bytes)
         prediction["plantid"] = plantid_result
 
-    save_prediction(prediction)
+    prediction["prediction_id"] = save_prediction(prediction)
     return prediction
 
 

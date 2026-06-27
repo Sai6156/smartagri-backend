@@ -32,7 +32,11 @@ def init_db():
             severity    TEXT,
             remedies    TEXT,
             fertilizers TEXT,
-            top5        TEXT
+            prevention  TEXT,
+            description TEXT,
+            top5        TEXT,
+            visual_diagnosis TEXT,
+            report      TEXT
         );
 
         CREATE TABLE IF NOT EXISTS alerts (
@@ -43,6 +47,16 @@ def init_db():
             status      TEXT
         );
     """)
+    for col, typ in {
+        "prevention": "TEXT",
+        "description": "TEXT",
+        "visual_diagnosis": "TEXT",
+        "report": "TEXT",
+    }.items():
+        try:
+            cur.execute(f"ALTER TABLE predictions ADD COLUMN {col} {typ}")
+        except sqlite3.OperationalError:
+            pass
     con.commit()
     con.close()
     print("[DB] SQLite database initialised.")
@@ -53,8 +67,9 @@ def save_prediction(pred: dict):
     con.execute("""
         INSERT INTO predictions
             (user_id, timestamp, filename, class_name, display_name, crop,
-             confidence, severity, remedies, fertilizers, top5)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             confidence, severity, remedies, fertilizers, prevention, description, top5,
+             visual_diagnosis, report)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         pred.get("user_id", "anonymous"),
         datetime.utcnow().isoformat(),
@@ -66,10 +81,16 @@ def save_prediction(pred: dict):
         pred.get("severity", ""),
         json.dumps(pred.get("remedies", [])),
         json.dumps(pred.get("fertilizers", [])),
+        pred.get("prevention", ""),
+        pred.get("description", ""),
         json.dumps(pred.get("top5", [])),
+        json.dumps(pred.get("visual_diagnosis", [])),
+        pred.get("report", ""),
     ))
+    pred_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
     con.commit()
     con.close()
+    return pred_id
 
 
 def get_history(limit: int = 50, user_id: str = "") -> list[dict]:
@@ -90,6 +111,7 @@ def get_history(limit: int = 50, user_id: str = "") -> list[dict]:
         d["remedies"]    = json.loads(d["remedies"] or "[]")
         d["fertilizers"] = json.loads(d["fertilizers"] or "[]")
         d["top5"]        = json.loads(d["top5"] or "[]")
+        d["visual_diagnosis"] = json.loads(d.get("visual_diagnosis") or "[]")
         result.append(d)
     return result
 

@@ -1,6 +1,6 @@
-"use client";
-import { useState } from "react";
-import { api } from "@/lib/api";
+﻿"use client";
+import { useEffect, useState } from "react";
+import { api, PredictResult } from "@/lib/api";
 import { TTSPlayer } from "@/lib/speech";
 import { AlertTriangle, Loader2, Volume2 } from "lucide-react";
 
@@ -8,19 +8,41 @@ const CROPS = ["Tomato", "Potato", "Pepper", "Corn", "Wheat", "Rice", "Apple", "
 
 interface Props { lang: string; speechLang: string; }
 
-export default function RiskForecaster({ lang, speechLang }: Props) {
-  const [crop, setCrop]     = useState("Tomato");
+function loadLastScan(): { result: PredictResult; imageUrl?: string } | null {
+  if (typeof window === "undefined") return null;
+  const raw = localStorage.getItem("sa_last_scan");
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch { return null; }
+}
+
+export default function RiskForecaster({ lang: _lang, speechLang }: Props) {
+  const [crop, setCrop] = useState("Tomato");
   const [location, setLocation] = useState("");
   const [forecast, setForecast] = useState("");
-  const [loading, setLoading]   = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [scan, setScan] = useState<{ result: PredictResult; imageUrl?: string } | null>(null);
   const tts = new TTSPlayer();
+
+  useEffect(() => {
+    const refresh = () => {
+      const latest = loadLastScan();
+      setScan(latest);
+      if (latest?.result?.crop) setCrop(latest.result.crop);
+    };
+    refresh();
+    window.addEventListener("sa-last-scan-updated", refresh);
+    return () => window.removeEventListener("sa-last-scan-updated", refresh);
+  }, []);
 
   async function generate() {
     setLoading(true); setForecast("");
     try {
       const loc = await api.locationDetect().catch(() => ({ lat: 17.38, lon: 78.46, city: location || "Local", region: "", country: "" }));
       const res = await api.riskForecast(crop, loc.lat, loc.lon, location || loc.city);
-      setForecast(res.forecast);
+      const context = scan?.result
+        ? `Latest leaf scan context: dataset model predicted ${scan.result.display_name} (${scan.result.confidence.toFixed(1)}%). Gemma visual top possibility: ${scan.result.visual_diagnosis?.[0]?.disease || "not available"}.\n\n`
+        : "";
+      setForecast(context + res.forecast);
     } catch (e: unknown) {
       setForecast("Forecast failed: " + (e instanceof Error ? e.message : "Unknown error"));
     } finally { setLoading(false); }
@@ -32,13 +54,24 @@ export default function RiskForecaster({ lang, speechLang }: Props) {
         <h2 className="font-semibold text-white mb-2 flex items-center gap-2">
           <AlertTriangle className="w-5 h-5 text-yellow-400" /> Disease Risk Forecaster
         </h2>
-        <p className="text-gray-500 text-sm mb-4">Predict disease risk based on current weather conditions for your crop.</p>
+        <p className="text-gray-500 text-sm mb-4">Uses current weather plus your latest leaf scan context automatically.</p>
+
+        {scan?.result && (
+          <div className="bg-gray-800 rounded-xl p-3 mb-4 flex gap-3 items-center">
+            {scan.imageUrl && <img src={scan.imageUrl} alt="latest scan" className="w-20 h-16 object-cover rounded-lg" />}
+            <div>
+              <p className="text-xs text-green-400 uppercase tracking-wide font-semibold">Latest scan connected</p>
+              <p className="text-sm text-white">{scan.result.display_name}</p>
+              <p className="text-xs text-gray-500">{scan.result.crop} · {scan.result.confidence.toFixed(1)}%</p>
+            </div>
+          </div>
+        )}
 
         <div className="space-y-3">
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Select Crop</label>
+            <label className="block text-sm text-gray-400 mb-1">Crop</label>
             <select className="input" value={crop} onChange={(e) => setCrop(e.target.value)}>
-              {CROPS.map((c) => <option key={c}>{c}</option>)}
+              {[...new Set([crop, ...CROPS])].map((c) => <option key={c}>{c}</option>)}
             </select>
           </div>
           <div>
@@ -48,7 +81,7 @@ export default function RiskForecaster({ lang, speechLang }: Props) {
           </div>
           <button onClick={generate} disabled={loading} className="btn-primary w-full flex items-center justify-center gap-2">
             {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-            {loading ? "Analyzing risk..." : "Forecast Disease Risk"}
+            {loading ? "Analyzing risk..." : "Forecast Risk From Scan + Weather"}
           </button>
         </div>
       </div>

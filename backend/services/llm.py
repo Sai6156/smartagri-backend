@@ -214,6 +214,82 @@ def answer_farming_question(question: str, history: list[dict]) -> str:
     return result or ""
 
 
+def visual_disease_possibilities(
+    image_bytes: bytes,
+    filename: str = "leaf.jpg",
+    model_prediction: str = "",
+) -> list[dict]:
+    """Use Gemma as a visual second opinion independent of dataset classes."""
+    import base64
+    import json
+
+    key = os.getenv("OPENROUTER_API_KEY", "")
+    if not key or not image_bytes:
+        return []
+
+    ext = (filename.rsplit(".", 1)[-1] if "." in filename else "jpg").lower()
+    mime = "image/png" if ext == "png" else "image/webp" if ext == "webp" else "image/jpeg"
+    data_url = f"data:{mime};base64,{base64.b64encode(image_bytes).decode('ascii')}"
+
+    prompt = f"""You are a plant pathologist. Inspect this uploaded leaf image directly.
+The dataset classifier predicted: {model_prediction or 'unknown'}.
+Do not be limited to the dataset classes. List the top 4 visually plausible crop disease possibilities.
+For each item include: disease, crop_if_visible, type (fungal/bacterial/viral/pest/nutrient/environmental), confidence 0-100, visual_reason, immediate_action.
+If the image resembles grape downy mildew, explicitly include Downy Mildew.
+Return ONLY valid JSON as an array of 4 objects. No markdown."""
+
+    payload = {
+        "model": DEFAULT_MODEL,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": data_url}},
+                ],
+            }
+        ],
+        "max_tokens": 900,
+        "temperature": 0.2,
+    }
+
+    try:
+        resp = requests.post(
+            f"{OPENROUTER_BASE}/chat/completions",
+            json=payload,
+            headers=_headers(),
+            timeout=45,
+        )
+        if resp.status_code != 200:
+            return []
+        text = resp.json()["choices"][0]["message"]["content"].strip()
+        if text.startswith("```"):
+            text = text.strip("`")
+            if text.lower().startswith("json"):
+                text = text[4:].strip()
+        data = json.loads(text)
+        if not isinstance(data, list):
+            return []
+
+        cleaned = []
+        for item in data[:4]:
+            if not isinstance(item, dict):
+                continue
+            cleaned.append(
+                {
+                    "disease": str(item.get("disease", "Unknown")),
+                    "crop_if_visible": str(item.get("crop_if_visible", "Unknown")),
+                    "type": str(item.get("type", "Unknown")),
+                    "confidence": float(item.get("confidence", 0) or 0),
+                    "visual_reason": str(item.get("visual_reason", "")),
+                    "immediate_action": str(item.get("immediate_action", "")),
+                }
+            )
+        return cleaned
+    except Exception:
+        return []
+
+
 # ── Fallbacks ─────────────────────────────────────────────────────────────
 def _fallback_report(disease: str, crop: str, severity: str, remedies: list[str]) -> str:
     return (
