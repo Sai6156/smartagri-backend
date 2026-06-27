@@ -7,7 +7,13 @@ from fastapi import APIRouter, UploadFile, File, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from backend.services.voice import transcribe_audio, synthesize_speech, voice_chat_reply
+from backend.services.voice import (
+    LANG_NAMES,
+    transcribe_audio,
+    synthesize_speech,
+    voice_chat_reply,
+    detect_language,
+)
 
 router = APIRouter(prefix="/api/voice", tags=["voice"])
 
@@ -22,6 +28,19 @@ class VoiceChatRequest(BaseModel):
 class TTSRequest(BaseModel):
     text: str
     language: str = "en"
+
+
+class DetectLangRequest(BaseModel):
+    text: str
+
+
+@router.post("/detect-lang")
+async def detect_lang(req: DetectLangRequest):
+    """Detect ISO-639-1 language code from text (for browser-STT fallback)."""
+    if not req.text.strip():
+        raise HTTPException(status_code=400, detail="Empty text.")
+    code = detect_language(req.text)
+    return {"language": code, "language_name": LANG_NAMES.get(code, code)}
 
 
 @router.post("/stt")

@@ -16,7 +16,7 @@ import requests
 from backend.services.llm import OPENROUTER_BASE, DEFAULT_MODEL, _headers, chat_completion
 
 STT_MODEL = "openai/whisper-1"
-TTS_MODEL = "openai/gpt-4o-mini-tts"
+TTS_MODEL = os.getenv("OPENROUTER_TTS_MODEL", "sesame/csm-1b")
 
 LANG_NAMES: dict[str, str] = {
     "en": "English", "te": "Telugu", "hi": "Hindi", "ta": "Tamil",
@@ -72,11 +72,19 @@ def transcribe_audio(audio_bytes: bytes, audio_format: str = "webm") -> dict:
             timeout=60,
         )
         if resp.status_code != 200:
+            err = resp.text[:300]
+            if resp.status_code == 402 or "balance" in err.lower():
+                return {
+                    "text": "",
+                    "language": "en",
+                    "language_name": "English",
+                    "error": "OpenRouter audio requires at least $0.50 account balance for speech-to-text.",
+                }
             return {
                 "text": "",
                 "language": "en",
                 "language_name": "English",
-                "error": resp.text[:200],
+                "error": err,
             }
         data = resp.json()
         text = (data.get("text") or "").strip()
@@ -120,7 +128,6 @@ def synthesize_speech(text: str, lang: str = "en") -> Optional[bytes]:
         return None
 
     lang = (lang or "en").lower()[:2]
-    lang_name = LANG_NAMES.get(lang, lang)
     voice = TTS_VOICES.get(lang, TTS_VOICES["default"])
 
     payload = {
@@ -128,17 +135,6 @@ def synthesize_speech(text: str, lang: str = "en") -> Optional[bytes]:
         "input": text,
         "voice": voice,
         "response_format": "mp3",
-        "provider": {
-            "options": {
-                "openai": {
-                    "instructions": (
-                        f"Speak naturally in {lang_name}. "
-                        f"Pronounce all words correctly in {lang_name}. "
-                        "Use a warm, clear farming-advisor tone."
-                    ),
-                }
-            }
-        },
     }
 
     try:
@@ -153,6 +149,11 @@ def synthesize_speech(text: str, lang: str = "en") -> Optional[bytes]:
         return None
     except Exception:
         return None
+
+
+def detect_language(text: str) -> str:
+    """Return ISO-639-1 code for spoken text."""
+    return _detect_lang_from_text(text) or "en"
 
 
 def voice_chat_reply(

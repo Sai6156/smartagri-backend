@@ -60,7 +60,7 @@ export default function Chatbot({ lang, speechLang }: Props) {
     setProcessing(true);
     try {
       const blob = await mic.current.stop();
-      const turn = await voiceTurn(blob, messages, "", voiceLang || undefined);
+      const turn = await voiceTurn(blob, messages, "", voiceLang || undefined, lang);
       if (!voiceLang) setVoiceLang(turn.language);
       const userMsg: ChatMsg = { role: "user", content: turn.userText };
       const history = [...messages, userMsg];

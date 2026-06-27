@@ -3,6 +3,6 @@
   "outputDirectory": ".next",
   "framework": "nextjs",
   "env": {
-    "NEXT_PUBLIC_API_BASE": "https://smartagri-backend.onrender.com"
+    "NEXT_PUBLIC_API_BASE": "https://smartagri-backend-lu26.onrender.com"
   }
 }

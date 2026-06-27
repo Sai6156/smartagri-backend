@@ -1,7 +1,10 @@
 /**
  * OpenRouter-powered voice: record → STT → chat → TTS
  * Input and output stay in the same auto-detected language.
+ * Falls back to browser speech recognition if OpenRouter STT credits are low.
  */
+
+import { STTRecorder, SPEECH_LANG_MAP } from "@/lib/speech";
 
 const BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
 
@@ -117,6 +120,39 @@ export async function transcribeAudio(blob: Blob): Promise<STTResult> {
   return res.json();
 }
 
+export async function detectLanguage(text: string): Promise<{ language: string; language_name: string }> {
+  const res = await fetch(`${BASE}/api/voice/detect-lang`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeader() },
+    body: JSON.stringify({ text }),
+  });
+  if (!res.ok) return { language: "en", language_name: "English" };
+  return res.json();
+}
+
+/** Browser speech recognition fallback (any language the browser supports). */
+export function browserListenOnce(hintLang = ""): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (!STTRecorder.isSupported()) {
+      reject(new Error("Speech recognition not supported in this browser."));
+      return;
+    }
+    const stt = new STTRecorder();
+    const code = hintLang || (typeof navigator !== "undefined" ? navigator.language.split("-")[0] : "en");
+    const bcp47 = SPEECH_LANG_MAP[code] || navigator.language || "en-US";
+    stt.start(
+      bcp47,
+      (text) => resolve(text),
+      () => reject(new Error("No speech detected.")),
+      (err) => reject(new Error(err || "Speech recognition failed."))
+    );
+  });
+}
+
+function isSttCreditError(msg: string): boolean {
+  return /balance|credit|\$0\.50/i.test(msg);
+}
+
 export async function voiceChat(
   message: string,
   language: string,
@@ -140,23 +176,43 @@ export async function voiceTurn(
   audioBlob: Blob,
   history: { role: string; content: string }[],
   context: string,
-  knownLang?: string
+  knownLang?: string,
+  browserLangHint = ""
 ): Promise<{
   userText: string;
   reply: string;
   language: string;
   language_name: string;
+  sttSource: "openrouter" | "browser";
 }> {
-  const stt = await transcribeAudio(audioBlob);
-  if (!stt.text) throw new Error("Could not understand speech. Try again.");
+  let userText = "";
+  let lang = knownLang || "";
+  let language_name = "";
+  let sttSource: "openrouter" | "browser" = "openrouter";
 
-  const lang = knownLang || stt.language || "en";
-  const chat = await voiceChat(stt.text, lang, history, context);
+  try {
+    const stt = await transcribeAudio(audioBlob);
+    if (!stt.text) throw new Error(stt.error || "Could not understand speech. Try again.");
+    userText = stt.text;
+    lang = knownLang || stt.language || "en";
+    language_name = stt.language_name;
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (!isSttCreditError(msg)) throw e;
+    userText = await browserListenOnce(browserLangHint);
+    const detected = await detectLanguage(userText);
+    lang = knownLang || detected.language || "en";
+    language_name = detected.language_name;
+    sttSource = "browser";
+  }
+
+  const chat = await voiceChat(userText, lang, history, context);
 
   return {
-    userText: stt.text,
+    userText,
     reply: chat.reply,
     language: lang,
-    language_name: stt.language_name,
+    language_name: language_name || lang,
+    sttSource,
   };
 }

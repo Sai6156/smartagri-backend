@@ -151,7 +151,7 @@ export default function DiseaseDetector({ lang, speechLang, userName }: Props) {
   async function processRecording(blob: Blob) {
     setProcessing(true);
     try {
-      const turn = await voiceTurn(blob, voiceHistory, buildVoiceContext(), voiceLang || undefined);
+      const turn = await voiceTurn(blob, voiceHistory, buildVoiceContext(), voiceLang || undefined, lang);
       if (!voiceLang) {
         setVoiceLang(turn.language);
         setVoiceLangName(turn.language_name);
