@@ -184,13 +184,6 @@ body {
   box-shadow: 0 2px 12px rgba(34,197,94,0.3);
 }
 
-/* Premium card */
-.premium-card {
-  background: linear-gradient(135deg, rgba(34,197,94,0.12) 0%, rgba(34,197,94,0.04) 100%);
-  border: 1px solid rgba(34, 197, 94, 0.2);
-  border-radius: 1rem;
-}
-
 /* Online dot */
 .online-dot {
   width: 8px;

@@ -10,7 +10,7 @@ import HistoryStats from "@/components/HistoryStats";
 import Chatbot from "@/components/Chatbot";
 import PageHeader from "@/components/PageHeader";
 import {
-  Leaf, BarChart2, Bot, LogOut, Menu, X, Sparkles, ChevronRight, Home,
+  Leaf, BarChart2, Bot, LogOut, Menu, X, Home,
 } from "lucide-react";
 
 const PAGES = [
@@ -125,19 +125,6 @@ export default function Dashboard() {
             </button>
           ))}
         </nav>
-
-        <div className="px-3 pb-3">
-          <div className="premium-card p-4">
-            <div className="flex items-center gap-2 mb-1">
-              <Sparkles className="w-4 h-4 text-green-400" />
-              <span className="text-sm font-semibold text-green-300">Go Premium</span>
-            </div>
-            <p className="text-xs text-[#7a8f82] mb-3">Unlock advanced insights and priority AI analysis.</p>
-            <button className="w-full flex items-center justify-center gap-1 text-xs font-medium text-green-400 hover:text-green-300 transition-colors">
-              Learn more <ChevronRight className="w-3 h-3" />
-            </button>
-          </div>
-        </div>
 
         <div className="px-3 pb-5 border-t border-white/5 pt-3">
           <button
