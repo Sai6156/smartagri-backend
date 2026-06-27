@@ -8,6 +8,7 @@ import {
   parseIotFile,
   parseIotInput,
 } from "@/lib/iotData";
+import IotDataPanel from "@/components/IotDataPanel";
 import { Cpu, ChevronDown, ChevronUp, Upload, X, CheckCircle2 } from "lucide-react";
 
 interface Props {
@@ -98,19 +99,20 @@ export default function IotSensorUpload({ value, onChange, disabled }: Props) {
       </button>
 
       {value?.summary && !open && (
-        <div className="mt-3 pt-3 border-t border-white/5 flex items-start justify-between gap-2">
-          <pre className="text-xs text-gray-400 whitespace-pre-wrap font-mono max-h-24 overflow-y-auto flex-1">
-            {value.summary}
-          </pre>
-          <button
-            type="button"
-            onClick={clear}
-            disabled={disabled}
-            className="text-gray-500 hover:text-red-400 p-1"
-            title="Remove IoT data"
-          >
-            <X className="w-4 h-4" />
-          </button>
+        <div className="mt-3 pt-3 border-t border-white/5">
+          <div className="flex items-start justify-between gap-2 mb-3">
+            <p className="text-xs text-cyan-400">Attached — will be used in report & chat</p>
+            <button
+              type="button"
+              onClick={clear}
+              disabled={disabled}
+              className="text-gray-500 hover:text-red-400 p-1 flex-shrink-0"
+              title="Remove IoT data"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <IotDataPanel data={value} compact />
         </div>
       )}
 
