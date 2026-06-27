@@ -1,7 +1,7 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 import { api, ChatMsg } from "@/lib/api";
-import { TTSPlayer, STTRecorder } from "@/lib/speech";
+import { MicRecorder, voiceTurn, speakText, stopAudio } from "@/lib/voiceApi";
 import { Send, Mic, MicOff, Volume2, Loader2, Bot, User } from "lucide-react";
 
 interface Props { lang: string; speechLang: string; }
@@ -11,13 +11,19 @@ export default function Chatbot({ lang, speechLang }: Props) {
   const [input, setInput]       = useState("");
   const [loading, setLoading]   = useState(false);
   const [listening, setListening] = useState(false);
-  const tts = useRef(new TTSPlayer());
-  const stt = useRef(new STTRecorder());
+  const [processing, setProcessing] = useState(false);
+  const [voiceLang, setVoiceLang] = useState("");
+  const mic = useRef<MicRecorder | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    mic.current = new MicRecorder();
+    return () => { mic.current?.cancel(); stopAudio(); };
+  }, []);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
-  async function sendMessage(text: string) {
+  async function sendMessage(text: string, detectedLang?: string) {
     if (!text.trim()) return;
     const userMsg: ChatMsg = { role: "user", content: text };
     const history = [...messages, userMsg];
@@ -28,7 +34,8 @@ export default function Chatbot({ lang, speechLang }: Props) {
       const res = await api.chat(text, messages.slice(-10));
       const aiMsg: ChatMsg = { role: "assistant", content: res.reply };
       setMessages([...history, aiMsg]);
-      tts.current.speak(res.reply, speechLang);
+      const ttsLang = detectedLang || voiceLang || speechLang || lang;
+      await speakText(res.reply, ttsLang);
     } catch {
       setMessages([...history, { role: "assistant", content: "Sorry, I couldn't process that." }]);
     } finally {
@@ -36,13 +43,45 @@ export default function Chatbot({ lang, speechLang }: Props) {
     }
   }
 
-  function startMic() {
-    stt.current.start(
-      speechLang,
-      (text) => { setListening(false); sendMessage(text); },
-      () => setListening(false),
-    );
-    setListening(true);
+  async function startMic() {
+    if (!mic.current) return;
+    stopAudio();
+    try {
+      await mic.current.start();
+      setListening(true);
+    } catch {
+      setListening(false);
+    }
+  }
+
+  async function stopMicAndSend() {
+    if (!mic.current?.isRecording) return;
+    setListening(false);
+    setProcessing(true);
+    try {
+      const blob = await mic.current.stop();
+      const turn = await voiceTurn(blob, messages, "", voiceLang || undefined);
+      if (!voiceLang) setVoiceLang(turn.language);
+      const userMsg: ChatMsg = { role: "user", content: turn.userText };
+      const history = [...messages, userMsg];
+      setMessages([...history, { role: "assistant", content: turn.reply }]);
+      await speakText(turn.reply, turn.language);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Voice failed";
+      setMessages((prev) => [...prev, { role: "assistant", content: msg }]);
+    } finally {
+      setProcessing(false);
+    }
+  }
+
+  function toggleMic() {
+    if (listening) stopMicAndSend();
+    else if (!processing) startMic();
+  }
+
+  async function speakMessage(text: string) {
+    const ttsLang = voiceLang || speechLang || lang;
+    await speakText(text, ttsLang);
   }
 
   const SUGGESTIONS = ["How to prevent leaf blight?", "Best fertilizers for tomato?", "Signs of early crop disease?"];
@@ -50,7 +89,10 @@ export default function Chatbot({ lang, speechLang }: Props) {
   return (
     <div className="max-w-3xl mx-auto flex flex-col h-[70vh]">
       <div className="card flex-1 flex flex-col overflow-hidden">
-        <h2 className="font-semibold text-white mb-4 flex-shrink-0">AI Farming Assistant</h2>
+        <h2 className="font-semibold text-white mb-1 flex-shrink-0">AI Farming Assistant</h2>
+        <p className="text-xs text-gray-500 mb-4 flex-shrink-0">
+          Voice: speak in any language — replies match your language
+        </p>
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto space-y-3 mb-4">
@@ -79,7 +121,7 @@ export default function Chatbot({ lang, speechLang }: Props) {
               }`}>
                 {m.content}
                 {m.role === "assistant" && (
-                  <button onClick={() => tts.current.speak(m.content, speechLang)}
+                  <button onClick={() => speakMessage(m.content)}
                     className="ml-2 text-gray-500 hover:text-gray-300 inline-flex">
                     <Volume2 className="w-3 h-3" />
                   </button>
@@ -92,7 +134,7 @@ export default function Chatbot({ lang, speechLang }: Props) {
               )}
             </div>
           ))}
-          {loading && (
+          {(loading || processing) && (
             <div className="flex gap-2">
               <div className="w-7 h-7 bg-green-700 rounded-full flex items-center justify-center flex-shrink-0">
                 <Bot className="w-4 h-4 text-white" />
@@ -115,14 +157,15 @@ export default function Chatbot({ lang, speechLang }: Props) {
             onKeyDown={(e) => e.key === "Enter" && sendMessage(input)}
           />
           <button
-            onClick={() => listening ? stt.current.stop() : startMic()}
+            onClick={toggleMic}
+            disabled={processing || loading}
             className={`px-3 py-2 rounded-lg transition-colors ${
               listening ? "bg-red-600 text-white animate-pulse" : "bg-gray-700 text-gray-300 hover:bg-gray-600"
             }`}
           >
             {listening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
           </button>
-          <button onClick={() => sendMessage(input)} disabled={loading || !input.trim()}
+          <button onClick={() => sendMessage(input)} disabled={loading || processing || !input.trim()}
             className="btn-primary px-3">
             <Send className="w-4 h-4" />
           </button>

@@ -1,7 +1,8 @@
 "use client";
 import { useState, useRef, useCallback, useEffect } from "react";
 import { api, PredictResult } from "@/lib/api";
-import { TTSPlayer, STTRecorder } from "@/lib/speech";
+import { TTSPlayer } from "@/lib/speech";
+import { MicRecorder, voiceTurn, speakText, stopAudio } from "@/lib/voiceApi";
 import PageHeader from "@/components/PageHeader";
 import DashboardStats from "@/components/DashboardStats";
 import {
@@ -33,19 +34,20 @@ export default function DiseaseDetector({ lang, speechLang, userName }: Props) {
   const [explanation, setExplanation]   = useState("");
   const [explainLoading, setExplainLoading] = useState(false);
 
-  // Voice conversation state
-  const sttRef      = useRef<STTRecorder | null>(null);
+  // Voice conversation state (OpenRouter STT/TTS — any language)
+  const micRef        = useRef<MicRecorder | null>(null);
   const [voiceActive, setVoiceActive]   = useState(false);
   const [voicePaused, setVoicePaused]   = useState(false);
   const [listening,   setListening]     = useState(false);
-  const [transcript,  setTranscript]    = useState("");
-  const [voiceReply,  setVoiceReply]    = useState("");
+  const [processing,  setProcessing]    = useState(false);
+  const [voiceLang,   setVoiceLang]     = useState("");
+  const [voiceLangName, setVoiceLangName] = useState("");
   const [voiceHistory, setVoiceHistory] = useState<{ role: string; content: string }[]>([]);
 
   useEffect(() => {
     ttsRef.current = new TTSPlayer();
-    sttRef.current = new STTRecorder();
-    return () => { ttsRef.current?.stop(); sttRef.current?.stop(); };
+    micRef.current = new MicRecorder();
+    return () => { ttsRef.current?.stop(); micRef.current?.cancel(); stopAudio(); };
   }, []);
 
   function handleFile(f: File) {
@@ -138,97 +140,121 @@ export default function DiseaseDetector({ lang, speechLang, userName }: Props) {
 
   // ── Voice Conversation ────────────────────────────────────────────────
   const buildVoiceContext = useCallback(() => {
-    if (!result) return [];
-    const systemMsg = {
-      role: "system" as const,
-      content: `You are SmartAgri assistant. The farmer's crop analysis result: 
-Disease: ${result.display_name}, Crop: ${result.crop}, 
-Confidence: ${result.confidence}%, Severity: ${result.severity}.
-Remedies: ${result.remedies.join(", ")}.
-Answer all questions in simple language. Keep answers under 3 sentences.`,
-    };
-    return [systemMsg, ...voiceHistory.map(h => ({
-      role: h.role as "user" | "assistant", content: h.content
-    }))];
-  }, [result, voiceHistory]);
-
-  function startListening() {
-    if (!sttRef.current || voicePaused) return;
-    ttsRef.current?.stop();
-    setListening(true);
-    sttRef.current.start(
-      speechLang,
-      async (text) => {
-        setTranscript(text);
-        setListening(false);
-        const newHistory = [...voiceHistory, { role: "user", content: text }];
-        setVoiceHistory(newHistory);
-        // Send to LLM
-        try {
-          const res = await api.chat(text, buildVoiceContext() as never);
-          const reply = res.reply;
-          setVoiceReply(reply);
-          setVoiceHistory([...newHistory, { role: "assistant", content: reply }]);
-          ttsRef.current?.speak(reply, speechLang, () => {
-            // After TTS ends, if not paused — prompt user
-            if (!voicePaused) {
-              const prompt = lang === "en"
-                ? "Do you have any more questions?"
-                : "If you have questions, press the microphone button.";
-              setTimeout(() => {
-                if (!voicePaused) ttsRef.current?.speak(prompt, speechLang);
-              }, 1000);
-            }
-          });
-        } catch {
-          ttsRef.current?.speak("Sorry, could not process that.", speechLang);
-        }
-      },
-      () => setListening(false),
-      (err) => { setListening(false); console.error(err); }
+    if (!result) return "";
+    return (
+      `Disease: ${result.display_name}, Crop: ${result.crop}, ` +
+      `Confidence: ${result.confidence}%, Severity: ${result.severity}. ` +
+      `Remedies: ${result.remedies.join(", ")}.`
     );
+  }, [result]);
+
+  async function processRecording(blob: Blob) {
+    setProcessing(true);
+    try {
+      const turn = await voiceTurn(blob, voiceHistory, buildVoiceContext(), voiceLang || undefined);
+      if (!voiceLang) {
+        setVoiceLang(turn.language);
+        setVoiceLangName(turn.language_name);
+      }
+      const newHistory = [
+        ...voiceHistory,
+        { role: "user", content: turn.userText },
+        { role: "assistant", content: turn.reply },
+      ];
+      setVoiceHistory(newHistory);
+
+      if (!voicePaused) {
+        await speakText(turn.reply, turn.language, () => {
+          if (!voicePaused && voiceActive) startListening();
+        });
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Voice processing failed";
+      if (!voicePaused) {
+        const lang = voiceLang || "en";
+        await speakText(msg, lang).catch(() => {});
+      }
+    } finally {
+      setProcessing(false);
+      setListening(false);
+    }
   }
 
-  function startVoiceConversation() {
+  async function startListening() {
+    if (!micRef.current || voicePaused || processing) return;
+    stopAudio();
+    ttsRef.current?.stop();
+    try {
+      await micRef.current.start();
+      setListening(true);
+    } catch {
+      setListening(false);
+    }
+  }
+
+  async function stopListeningAndProcess() {
+    if (!micRef.current?.isRecording) return;
+    setListening(false);
+    try {
+      const blob = await micRef.current.stop();
+      await processRecording(blob);
+    } catch {
+      setProcessing(false);
+    }
+  }
+
+  async function startVoiceConversation() {
     if (!result) return;
     setVoiceActive(true);
     setVoicePaused(false);
     setVoiceHistory([]);
-    setTranscript("");
-    setVoiceReply("");
-    // Greet the farmer
-    const greeting = lang === "en"
-      ? `Hello ${userName || "Farmer"}! I've analyzed your ${result.crop} crop. I detected ${result.display_name}. Do you have any questions?`
-      : `${result.display_name} detected on ${result.crop}. I'm ready to help.`;
-    ttsRef.current?.speak(greeting, speechLang, () => {
-      if (!voicePaused) startListening();
-    });
+    setVoiceLang("");
+    setVoiceLangName("");
+    const greetingLang = lang;
+    const greeting =
+      lang === "en"
+        ? `Hello ${userName || "Farmer"}! I analyzed your ${result.crop}. Ask me anything in your language.`
+        : `Hello! I detected ${result.display_name} on your ${result.crop}. Speak in your language.`;
+    try {
+      await speakText(greeting, greetingLang, () => {
+        if (!voicePaused) startListening();
+      });
+    } catch {
+      startListening();
+    }
   }
 
   function pauseVoice() {
     setVoicePaused(true);
-    sttRef.current?.stop();
-    ttsRef.current?.pause();
+    micRef.current?.cancel();
+    stopAudio();
+    ttsRef.current?.stop();
     setListening(false);
+    setProcessing(false);
   }
 
-  function resumeVoice() {
+  async function resumeVoice() {
     setVoicePaused(false);
-    ttsRef.current?.resume();
-    const prompt = lang === "en"
-      ? "I'm back. Do you have any questions?"
-      : "Ready for your questions.";
-    setTimeout(() => {
-      ttsRef.current?.speak(prompt, speechLang, () => startListening());
-    }, 500);
+    const langCode = voiceLang || lang;
+    try {
+      await speakText(
+        langCode === "en" ? "I'm back. Ask your question." : "Ready for your question.",
+        langCode,
+        () => startListening()
+      );
+    } catch {
+      startListening();
+    }
   }
 
   function endVoiceConversation() {
     setVoiceActive(false);
     setVoicePaused(false);
-    sttRef.current?.stop();
+    micRef.current?.cancel();
+    stopAudio();
     ttsRef.current?.stop();
     setListening(false);
+    setProcessing(false);
   }
 
   return (
@@ -520,15 +546,19 @@ Answer all questions in simple language. Keep answers under 3 sentences.`,
                       <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${
                         voicePaused
                           ? "bg-yellow-950/40 border border-yellow-800 text-yellow-300"
+                          : processing
+                          ? "bg-blue-950/40 border border-blue-800 text-blue-300"
                           : listening
                           ? "bg-red-950/40 border border-red-800 text-red-300"
                           : "bg-green-950/40 border border-green-800 text-green-300"
                       }`}>
                         <span className={`w-2 h-2 rounded-full ${
-                          voicePaused ? "bg-yellow-400" : listening ? "bg-red-400 animate-pulse" : "bg-green-400"
+                          voicePaused ? "bg-yellow-400" : processing ? "bg-blue-400 animate-pulse" : listening ? "bg-red-400 animate-pulse" : "bg-green-400"
                         }`} />
                         {voicePaused ? "Paused — press Resume to continue" :
-                         listening    ? "Listening..." : "Ready — press mic to speak"}
+                         processing ? "Processing your speech..." :
+                         listening    ? "Listening — tap mic when done" :
+                         voiceLangName ? `Ready — speak in ${voiceLangName}` : "Ready — speak in any language"}
                       </div>
 
                       {/* Conversation history */}
@@ -549,16 +579,18 @@ Answer all questions in simple language. Keep answers under 3 sentences.`,
                         {!voicePaused ? (
                           <>
                             <button
-                              onClick={startListening}
-                              disabled={listening}
+                              onClick={() => listening ? stopListeningAndProcess() : startListening()}
+                              disabled={processing}
                               className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
                                 listening
                                   ? "bg-red-600 text-white animate-pulse"
+                                  : processing
+                                  ? "bg-gray-600 text-gray-300 cursor-wait"
                                   : "bg-green-600 hover:bg-green-500 text-white"
                               }`}
                             >
                               {listening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-                              {listening ? "Listening..." : "Speak"}
+                              {listening ? "Stop & Send" : processing ? "Processing..." : "Speak"}
                             </button>
                             <button onClick={pauseVoice} className="btn-secondary flex items-center gap-1.5 text-sm">
                               <Pause className="w-4 h-4" /> Pause
