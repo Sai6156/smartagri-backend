@@ -3,36 +3,31 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { getUser, logout } from "@/lib/auth";
 import { SPEECH_LANG_MAP } from "@/lib/speech";
+import { ScanLog } from "@/lib/scanLog";
 import LanguageSelector from "@/components/LanguageSelector";
-import DiseaseDetector from "@/components/DiseaseDetector";
-import PlantIdentifier from "@/components/PlantIdentifier";
-import WeatherMonitor from "@/components/WeatherMonitor";
+import HomeHub from "@/components/HomeHub";
 import HistoryStats from "@/components/HistoryStats";
-import CropReport from "@/components/CropReport";
-import RiskForecaster from "@/components/RiskForecaster";
 import Chatbot from "@/components/Chatbot";
 import PageHeader from "@/components/PageHeader";
 import {
-  Leaf, Microscope, Cloud, BarChart2,
-  FileText, AlertTriangle, Bot, LogOut, Menu, X, Sparkles, ChevronRight,
+  Leaf, BarChart2, Bot, LogOut, Menu, X, Sparkles, ChevronRight, Home,
 } from "lucide-react";
 
 const PAGES = [
-  { id: "detect",   label: "Disease Detector",  icon: Leaf,        subtitle: "Upload a leaf image and get instant AI-powered disease analysis." },
-  { id: "plant",    label: "Plant Identifier",   icon: Microscope,  subtitle: "Identify plant species using PlantNet AI." },
-  { id: "weather",  label: "Weather Monitor",    icon: Cloud,       subtitle: "Real-time weather and farming irrigation advice." },
-  { id: "history",  label: "History & Stats",    icon: BarChart2,   subtitle: "View your scan history and complete reports." },
-  { id: "report",   label: "AI Crop Report",     icon: FileText,    subtitle: "Generate comprehensive crop health reports." },
-  { id: "risk",     label: "Risk Forecaster",    icon: AlertTriangle, subtitle: "Forecast disease risk from weather and scan data." },
-  { id: "chat",     label: "AI Chatbot",         icon: Bot,         subtitle: "Ask farming questions in your language." },
-];
+  { id: "home",    label: "Home",             icon: Home,       subtitle: "Upload a leaf image for full AI analysis." },
+  { id: "history", label: "History & Stats",  icon: BarChart2,  subtitle: "Your past scans and farming statistics." },
+  { id: "chat",    label: "AI Chatbot",       icon: Bot,        subtitle: "Ask farming questions in your language." },
+] as const;
+
+type PageId = (typeof PAGES)[number]["id"];
 
 export default function Dashboard() {
   const router = useRouter();
   const [user, setUser] = useState<{ name: string; email: string } | null>(null);
-  const [page, setPage] = useState("detect");
+  const [page, setPage] = useState<PageId>("home");
   const [lang, setLang] = useState("en");
   const [sideOpen, setSideOpen] = useState(false);
+  const [loadedLog, setLoadedLog] = useState<ScanLog | null>(null);
 
   useEffect(() => {
     const u = getUser();
@@ -56,14 +51,36 @@ export default function Dashboard() {
     router.replace("/");
   }
 
+  function openLogFromHistory(log: ScanLog) {
+    setLoadedLog(log);
+    setPage("home");
+    setSideOpen(false);
+  }
+
+  function clearLoadedLog() {
+    setLoadedLog(null);
+  }
+
   const PageComponent = {
-    detect:  <DiseaseDetector lang={lang} speechLang={speechLang} userName={user?.name || ""} />,
-    plant:   <><PageHeader title="Plant Identifier" subtitle={current.subtitle} /><PlantIdentifier lang={lang} /></>,
-    weather: <><PageHeader title="Weather Monitor" subtitle={current.subtitle} /><WeatherMonitor lang={lang} speechLang={speechLang} /></>,
-    history: <><PageHeader title="History & Stats" subtitle={current.subtitle} /><HistoryStats lang={lang} /></>,
-    report:  <><PageHeader title="AI Crop Report" subtitle={current.subtitle} /><CropReport lang={lang} speechLang={speechLang} /></>,
-    risk:    <><PageHeader title="Risk Forecaster" subtitle={current.subtitle} /><RiskForecaster lang={lang} speechLang={speechLang} /></>,
-    chat:    <><PageHeader title="AI Chatbot" subtitle={current.subtitle} /><Chatbot lang={lang} speechLang={speechLang} /></>,
+    home: (
+      <HomeHub
+        lang={lang}
+        loadedLog={loadedLog}
+        onNewScan={clearLoadedLog}
+      />
+    ),
+    history: (
+      <>
+        <PageHeader title="History & Stats" subtitle={current.subtitle} />
+        <HistoryStats onOpenLog={openLogFromHistory} />
+      </>
+    ),
+    chat: (
+      <>
+        <PageHeader title="AI Chatbot" subtitle={current.subtitle} />
+        <Chatbot lang={lang} speechLang={speechLang} />
+      </>
+    ),
   }[page];
 
   return (
@@ -72,13 +89,11 @@ export default function Dashboard() {
         <div className="fixed inset-0 bg-black/70 z-20 lg:hidden backdrop-blur-sm" onClick={() => setSideOpen(false)} />
       )}
 
-      {/* Sidebar */}
       <aside className={`
-        fixed lg:static inset-y-0 left-0 z-30 w-[260px] glass-panel
+        fixed lg:static inset-y-0 left-0 z-30 w-[240px] glass-panel
         flex flex-col transition-transform duration-300
         ${sideOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
       `}>
-        {/* Brand */}
         <div className="px-5 py-6 border-b border-white/5">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500 to-green-700 flex items-center justify-center shadow-lg shadow-green-500/20">
@@ -94,13 +109,12 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Nav */}
-        <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-0.5">
+        <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
           {PAGES.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               onClick={() => { setPage(id); setSideOpen(false); }}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm transition-all ${
+              className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm transition-all ${
                 page === id
                   ? "nav-active font-medium"
                   : "text-[#7a8f82] hover:text-[#c8d4cc] hover:bg-white/3"
@@ -112,7 +126,6 @@ export default function Dashboard() {
           ))}
         </nav>
 
-        {/* Premium */}
         <div className="px-3 pb-3">
           <div className="premium-card p-4">
             <div className="flex items-center gap-2 mb-1">
@@ -126,7 +139,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Sign out */}
         <div className="px-3 pb-5 border-t border-white/5 pt-3">
           <button
             onClick={handleLogout}
@@ -138,14 +150,15 @@ export default function Dashboard() {
         </div>
       </aside>
 
-      {/* Main */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-        {/* Header */}
         <header className="flex items-center gap-4 px-5 lg:px-8 py-4 border-b border-white/5 glass-panel flex-shrink-0">
           <button onClick={() => setSideOpen(true)} className="lg:hidden text-[#7a8f82] hover:text-white">
             <Menu className="w-5 h-5" />
           </button>
-          <div className="flex-1" />
+          <div className="flex-1 lg:hidden">
+            <p className="text-sm font-medium text-white">{current.label}</p>
+          </div>
+          <div className="flex-1 hidden lg:block" />
           <LanguageSelector value={lang} onChange={handleLangChange} />
           <div className="flex items-center gap-2.5 pl-3 border-l border-white/8">
             <div className="relative">
@@ -161,7 +174,6 @@ export default function Dashboard() {
           </div>
         </header>
 
-        {/* Content */}
         <main className="flex-1 overflow-y-auto px-5 lg:px-8 py-6 lg:py-8">
           {PageComponent}
         </main>
