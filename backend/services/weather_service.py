@@ -8,7 +8,6 @@ import requests
 
 from backend.services.weather_api import get_current_weather as weatherapi_raw
 from backend.services.open_meteo import get_current_weather as open_meteo_raw
-from backend.services.geocoding import reverse_geocode
 
 OWM_BASE = "https://api.openweathermap.org/data/2.5"
 
@@ -97,29 +96,24 @@ def _fetch_owm(lat: float, lon: float, location_name: str = "") -> dict | None:
 
 
 def fetch_current_weather(lat: float, lon: float, location_name: str = "") -> dict:
-    """
-    Fetch weather using the best available provider.
-    Resolves a human-readable Indian city name when possible.
-    """
-    if not location_name:
-        geo = reverse_geocode(lat, lon)
-        location_name = geo.get("city", "")
+    """Fetch weather using the best available provider."""
+    loc_name = (location_name or "").strip()
 
-    # 1) WeatherAPI — best Indian place names + accurate conditions
+    # 1) WeatherAPI
     wa = weatherapi_raw(lat, lon)
     if wa.get("available"):
         result = _normalize_weatherapi(wa)
-        if location_name and location_name != "Your location":
-            result["location"] = location_name
+        if loc_name and loc_name != "Your location":
+            result["location"] = loc_name
         return result
 
-    # 2) Open-Meteo — free, coordinate-accurate across India
-    om = open_meteo_raw(lat, lon, location_name)
+    # 2) Open-Meteo
+    om = open_meteo_raw(lat, lon, loc_name)
     if om.get("available"):
         return om
 
-    # 3) OpenWeatherMap — legacy fallback
-    owm = _fetch_owm(lat, lon, location_name)
+    # 3) OpenWeatherMap
+    owm = _fetch_owm(lat, lon, loc_name)
     if owm:
         return owm
 
@@ -128,10 +122,10 @@ def fetch_current_weather(lat: float, lon: float, location_name: str = "") -> di
     )
 
 
-def fetch_weather_summary(lat: float, lon: float) -> dict:
-    """Lightweight weather dict for reports (temperature, humidity, description)."""
+def fetch_weather_summary(lat: float, lon: float, location_name: str = "") -> dict:
+    """Lightweight weather dict for reports."""
     try:
-        w = fetch_current_weather(lat, lon)
+        w = fetch_current_weather(lat, lon, location_name)
         return {
             "temperature_c": w.get("temperature_c"),
             "humidity_pct": w.get("humidity_pct"),

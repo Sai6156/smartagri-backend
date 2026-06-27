@@ -70,7 +70,7 @@ def _coords_from_open_meteo(name: str) -> tuple[float, float] | None:
         resp = requests.get(
             "https://geocoding-api.open-meteo.com/v1/search",
             params={"name": name, "count": 3, "language": "en", "country": "IN"},
-            timeout=8,
+            timeout=5,
         )
         if resp.status_code != 200:
             return None
@@ -142,7 +142,7 @@ def reverse_geocode(lat: float, lon: float) -> dict | None:
         return None
 
 
-def search_places(q: str, limit: int = 8) -> list[dict]:
+def search_places(q: str, limit: int = 6) -> list[dict]:
     """Search Indian places via Mappls Atlas autosuggest."""
     headers = _auth_headers()
     if not headers:
@@ -153,12 +153,19 @@ def search_places(q: str, limit: int = 8) -> list[dict]:
             ATLAS_SEARCH,
             params={"query": q, "region": "IND"},
             headers=headers,
-            timeout=12,
+            timeout=10,
         )
         if resp.status_code != 200:
             return []
 
         locations = resp.json().get("suggestedLocations", [])
+        if not locations:
+            return []
+
+        # One Open-Meteo lookup for the query — reuse for city matches
+        query_name = q.split(",")[0].strip()
+        default_coords = _coords_from_open_meteo(query_name)
+
         results: list[dict] = []
 
         for loc in locations[:limit]:
@@ -167,16 +174,12 @@ def search_places(q: str, limit: int = 8) -> list[dict]:
             address = loc.get("placeAddress", "")
             alt = loc.get("alternateName", "")
 
-            # Build region from address (often state or full address)
             region = address if place_type == "CITY" else _extract_state(address)
             city = name
 
-            coords = _coords_from_open_meteo(name)
-            if not coords and address:
-                # POI results have full address — try district/city from address tail
-                parts = [p.strip() for p in address.split(",")]
-                if parts:
-                    coords = _coords_from_open_meteo(parts[0])
+            coords = default_coords if place_type == "CITY" and default_coords else None
+            if not coords and place_type != "CITY":
+                coords = _coords_from_open_meteo(name)
 
             if not coords:
                 continue

@@ -19,6 +19,8 @@ export default function LocationBar() {
   >([]);
   const [showSearch, setShowSearch] = useState(false);
 
+  const [status, setStatus] = useState("");
+
   const refresh = useCallback(() => setLoc(loadUserLocation()), []);
 
   useEffect(() => {
@@ -30,9 +32,11 @@ export default function LocationBar() {
   async function detectGps() {
     setLoading(true);
     setError("");
+    setStatus("Getting GPS fix…");
     setResults([]);
     try {
       const { lat, lon } = await getBrowserGpsFresh();
+      setStatus("Looking up your city…");
       const geo = await api.reverseGeocode(lat, lon);
       const next: UserLocation = {
         lat,
@@ -49,6 +53,7 @@ export default function LocationBar() {
       setError(e instanceof Error ? e.message : "Location failed");
     } finally {
       setLoading(false);
+      setStatus("");
     }
   }
 
@@ -56,6 +61,7 @@ export default function LocationBar() {
     if (query.trim().length < 2) return;
     setLoading(true);
     setError("");
+    setStatus("Searching cities…");
     try {
       const hits = await api.searchCity(query.trim());
       setResults(hits);
@@ -64,6 +70,7 @@ export default function LocationBar() {
       setError("City search failed.");
     } finally {
       setLoading(false);
+      setStatus("");
     }
   }
 
@@ -149,6 +156,7 @@ export default function LocationBar() {
       )}
 
       {error && <p className="text-xs text-amber-400 mt-2">{error}</p>}
+      {status && loading && <p className="text-xs text-green-400 mt-2">{status}</p>}
       {loc?.source === "manual" && (
         <p className="text-xs text-gray-500 mt-2">Using manually selected city.</p>
       )}

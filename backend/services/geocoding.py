@@ -29,6 +29,7 @@ def search_city(q: str, limit: int = 8) -> list[dict]:
     """Search cities/towns — biased toward India."""
     results: list[dict] = []
     seen: set[tuple[float, float]] = set()
+    source_rank = {"mappls": 0, "weatherapi": 1, "open-meteo": 2, "nominatim": 3}
 
     def add(lat: float, lon: float, city: str, region: str, country: str, source: str):
         key = (round(lat, 3), round(lon, 3))
@@ -45,7 +46,7 @@ def search_city(q: str, limit: int = 8) -> list[dict]:
             "source": source,
         })
 
-    # 0) Mappls — best India coverage (Warangal, villages, districts)
+    # 0) Mappls — best India coverage
     if mappls_svc.is_configured():
         for p in mappls_svc.search_places(q, limit=limit):
             add(
@@ -56,8 +57,11 @@ def search_city(q: str, limit: int = 8) -> list[dict]:
                 p.get("country", "India"),
                 "mappls",
             )
+        if len(results) >= 2:
+            results.sort(key=lambda r: source_rank.get(r.get("source", ""), 9))
+            return results[:limit]
 
-    # 1) WeatherAPI — strong Indian district/town coverage
+    # 1) WeatherAPI — only if Mappls had no results
     wa_key = os.getenv("WEATHERAPI_KEY", "")
     if wa_key:
         try:
@@ -136,7 +140,6 @@ def search_city(q: str, limit: int = 8) -> list[dict]:
         pass
 
     # Prefer India results, then by source quality
-    source_rank = {"mappls": 0, "weatherapi": 1, "open-meteo": 2, "nominatim": 3}
     results.sort(
         key=lambda r: (
             0 if "india" in r.get("country", "").lower() or r.get("country") == "IN" else 1,

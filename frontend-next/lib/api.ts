@@ -6,16 +6,28 @@ function authHeader(): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-async function req<T>(path: string, opts: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    ...opts,
-    headers: { ...authHeader(), ...(opts.headers || {}) },
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || "Request failed");
+async function req<T>(path: string, opts: RequestInit = {}, timeoutMs = 90000): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${BASE}${path}`, {
+      ...opts,
+      signal: controller.signal,
+      headers: { ...authHeader(), ...(opts.headers || {}) },
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || "Request failed");
+    }
+    return res.json();
+  } catch (e) {
+    if (e instanceof Error && e.name === "AbortError") {
+      throw new Error("Request timed out — server may be waking up. Wait 30s and try again.");
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
   }
-  return res.json();
 }
 
 // ── Auth ─────────────────────────────────────────────────────────────────
@@ -76,11 +88,13 @@ export const api = {
   locationDetect: () => req<LocationData>("/api/location/detect"),
 
   reverseGeocode: (lat: number, lon: number) =>
-    req<LocationData>(`/api/location/reverse?lat=${lat}&lon=${lon}`),
+    req<LocationData>(`/api/location/reverse?lat=${lat}&lon=${lon}`, {}, 30000),
 
   searchCity: (q: string) =>
     req<{ lat: number; lon: number; city: string; region: string; country: string; label: string }[]>(
-      `/api/location/search?q=${encodeURIComponent(q)}`
+      `/api/location/search?q=${encodeURIComponent(q)}`,
+      {},
+      25000
     ),
 
   // ── Plant ID ─────────────────────────────────────────────────────────

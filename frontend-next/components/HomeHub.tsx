@@ -62,6 +62,18 @@ export default function HomeHub({ lang, loadedLog, onNewScan }: Props) {
     setStepStatus(PIPELINE.map(() => "pending"));
 
     try {
+      // Location first — instant if already set in LocationBar
+      let lat: number, lon: number, city: string;
+      try {
+        ({ lat, lon, city } = await resolveLocation());
+      } catch (e) {
+        throw new Error(
+          e instanceof Error
+            ? e.message
+            : "Set your location using GPS or search your city before scanning."
+        );
+      }
+
       setStep(0, "running");
       const prediction = await api.predict(file, lang);
       setStep(0, "done");
@@ -75,21 +87,10 @@ export default function HomeHub({ lang, loadedLog, onNewScan }: Props) {
       }
       setStep(1, "done");
 
-      let lat: number, lon: number, city: string;
-      try {
-        ({ lat, lon, city } = await resolveLocation());
-      } catch (e) {
-        throw new Error(
-          e instanceof Error
-            ? e.message
-            : "Set your location using GPS or search your city (e.g. Warangal) before scanning."
-        );
-      }
-
       setStep(2, "running");
       let weather = null;
       try {
-          weather = await api.weather(lat, lon, city);
+        weather = await api.weather(lat, lon, city);
       } catch {
         weather = null;
       }
