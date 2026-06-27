@@ -68,8 +68,10 @@ export const api = {
     }),
 
   // ── Weather ──────────────────────────────────────────────────────────
-  weather: (lat: number, lon: number) =>
-    req<WeatherData>(`/api/weather?lat=${lat}&lon=${lon}`),
+  weather: (lat: number, lon: number, location?: string) =>
+    req<WeatherData>(
+      `/api/weather?lat=${lat}&lon=${lon}${location ? `&location=${encodeURIComponent(location)}` : ""}`
+    ),
 
   locationDetect: () => req<LocationData>("/api/location/detect"),
 

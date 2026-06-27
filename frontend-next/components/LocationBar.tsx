@@ -124,7 +124,7 @@ export default function LocationBar() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && void search()}
-              placeholder="e.g. Warangal"
+              placeholder="e.g. Warangal, Telangana"
               className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder:text-gray-600"
             />
             <button type="button" onClick={() => void search()} disabled={loading} className="btn-primary text-xs px-4">

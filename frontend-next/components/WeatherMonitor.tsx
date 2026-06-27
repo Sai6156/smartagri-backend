@@ -30,7 +30,7 @@ export default function WeatherMonitor({ lang: _lang, speechLang }: Props) {
     setLoading(true);
     setError("");
     try {
-      const w = await api.weather(loc.lat, loc.lon);
+      const w = await api.weather(loc.lat, loc.lon, loc.city);
       setWeather(w);
       setUserLoc(loc);
       saveUserLocation(loc);

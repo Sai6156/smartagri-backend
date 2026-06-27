@@ -89,7 +89,7 @@ export default function HomeHub({ lang, loadedLog, onNewScan }: Props) {
       setStep(2, "running");
       let weather = null;
       try {
-        weather = await api.weather(lat, lon);
+          weather = await api.weather(lat, lon, city);
       } catch {
         weather = null;
       }
