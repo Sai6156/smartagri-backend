@@ -10,6 +10,8 @@ export interface ScanLog {
   cropReport?: string;
   weather?: WeatherData | null;
   weatherLocation?: string;
+  lat?: number;
+  lon?: number;
   riskForecast?: string;
 }
 

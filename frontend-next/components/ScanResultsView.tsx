@@ -1,11 +1,10 @@
 "use client";
-import { useState } from "react";
 import { ScanLog } from "@/lib/scanLog";
-import { downloadCropReportPdf } from "@/lib/cropReportPdf";
+import CropReportDownload from "@/components/CropReportDownload";
 import { stripReportMarkdown } from "@/lib/formatReport";
 import {
-  Microscope, Cloud, FileText, AlertTriangle,
-  Thermometer, Droplets, Wind, Sparkles, Download,
+  Microscope, Cloud, AlertTriangle,
+  Thermometer, Droplets, Wind, Sparkles,
 } from "lucide-react";
 
 const SEV_BADGE: Record<string, string> = {
@@ -19,17 +18,6 @@ interface Props {
 
 export default function ScanResultsView({ log, isArchive }: Props) {
   const p = log.prediction;
-  const [downloading, setDownloading] = useState(false);
-
-  function handleDownloadReport() {
-    if (!log.cropReport?.trim()) return;
-    setDownloading(true);
-    try {
-      downloadCropReportPdf(log);
-    } finally {
-      setDownloading(false);
-    }
-  }
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
@@ -38,6 +26,8 @@ export default function ScanResultsView({ log, isArchive }: Props) {
           Archived scan · {new Date(log.timestamp).toLocaleString()}
         </div>
       )}
+
+      <CropReportDownload log={log} />
 
       {/* Hero */}
       <div className="card card-glow overflow-hidden">
@@ -160,31 +150,6 @@ export default function ScanResultsView({ log, isArchive }: Props) {
           <p className="text-sm text-green-200 bg-green-950/40 rounded-lg p-3 border border-green-900/50">
             {log.weather.irrigation_advice}
           </p>
-        </section>
-      )}
-
-      {/* Crop report — PDF download only */}
-      {log.cropReport?.trim() && !log.cropReport.startsWith("Report could not") && (
-        <section className="card border-amber-900/30">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <h3 className="font-semibold text-white flex items-center gap-2">
-                <FileText className="w-4 h-4 text-amber-400" /> AI Crop Report
-              </h3>
-              <p className="text-sm text-gray-500 mt-1">
-                Professional PDF report ready — includes disease analysis, treatment plan, and weather advisory.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={handleDownloadReport}
-              disabled={downloading}
-              className="btn-primary flex items-center gap-2 text-sm"
-            >
-              <Download className="w-4 h-4" />
-              {downloading ? "Preparing…" : "Download PDF"}
-            </button>
-          </div>
         </section>
       )}
 

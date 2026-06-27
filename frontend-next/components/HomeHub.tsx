@@ -139,6 +139,8 @@ export default function HomeHub({ lang, loadedLog, onNewScan }: Props) {
         cropReport,
         weather,
         weatherLocation: city,
+        lat,
+        lon,
         riskForecast,
       };
 

@@ -1,3 +1,5 @@
+import { ScanLog } from "@/lib/scanLog";
+
 /** Convert LLM markdown output into clean plain text for PDF export. */
 
 export function stripReportMarkdown(text: string): string {
@@ -60,4 +62,40 @@ export function parseReportSections(text: string): ReportSection[] {
   }
 
   return sections;
+}
+
+/** Professional plain-text report when AI generation is unavailable. */
+export function buildFallbackReport(log: ScanLog): string {
+  const p = log.prediction;
+  const loc = log.weatherLocation || log.weather?.location || "Not specified";
+  const weatherLine = log.weather
+    ? `Current conditions: ${log.weather.temperature_c}°C, ${log.weather.humidity_pct}% humidity, ${log.weather.description}. ${log.weather.irrigation_advice}`
+    : "Weather data not available for this scan.";
+
+  return [
+    "EXECUTIVE SUMMARY",
+    "",
+    `${p.display_name} was detected on ${p.crop} with ${p.confidence.toFixed(1)}% confidence. Severity: ${p.severity}. Location: ${loc}.`,
+    p.description,
+    "",
+    "IMMEDIATE ACTION PLAN",
+    "",
+    ...p.remedies.map((r, i) => `${i + 1}. ${r}`),
+    "",
+    "FERTILIZER AND NUTRITION PLAN",
+    "",
+    ...p.fertilizers.map((f, i) => `${i + 1}. ${f}`),
+    "",
+    "PREVENTION",
+    "",
+    p.prevention || "Follow integrated pest management practices.",
+    "",
+    "WEATHER-BASED ADVISORY",
+    "",
+    weatherLine,
+    "",
+    log.riskForecast ? "RISK FORECAST\n\n" + stripReportMarkdown(log.riskForecast) : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
 }

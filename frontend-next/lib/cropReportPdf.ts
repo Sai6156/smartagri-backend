@@ -29,8 +29,8 @@ function ensureSpace(doc: jsPDF, y: number, needed: number): number {
   return y;
 }
 
-export function downloadCropReportPdf(log: ScanLog): void {
-  if (!log.cropReport?.trim()) return;
+export function downloadCropReportPdf(log: ScanLog, reportText: string): void {
+  if (!reportText?.trim()) return;
 
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const p = log.prediction;
@@ -81,7 +81,7 @@ export function downloadCropReportPdf(log: ScanLog): void {
   y += 8;
   doc.setTextColor(30, 30, 30);
 
-  const sections = parseReportSections(log.cropReport);
+  const sections = parseReportSections(reportText);
 
   for (const section of sections) {
     y = ensureSpace(doc, y, 20);
