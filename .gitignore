@@ -1,0 +1,22 @@
+.env
+*.pyc
+__pycache__/
+*.db
+*.sqlite3
+smart_agri_model.pth
+*.pth
+.venv/
+venv/
+node_modules/
+frontend-next/.next/
+frontend-next/node_modules/
+*.egg-info/
+dist/
+build/
+.DS_Store
+outputs/
+"New Plant Diseases Dataset(Augmented)"/
+New Plant Diseases Dataset*/
+*.zip
+notebooks/
+

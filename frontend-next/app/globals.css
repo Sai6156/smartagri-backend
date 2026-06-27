@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+:root { --radius: 0.5rem; }
+
+html { scroll-behavior: smooth; }
+
+.card {
+  @apply bg-gray-900 border border-gray-800 rounded-xl p-5;
+}
+
+.btn-primary {
+  @apply bg-green-600 hover:bg-green-500 text-white font-semibold px-5 py-2.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.btn-secondary {
+  @apply bg-gray-800 hover:bg-gray-700 text-gray-200 font-medium px-4 py-2 rounded-lg transition-colors;
+}
+
+.input {
+  @apply w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500;
+}
+
+.badge-high   { @apply bg-red-900/60 text-red-300 border border-red-800 px-2.5 py-0.5 rounded-full text-xs font-medium; }
+.badge-medium { @apply bg-yellow-900/60 text-yellow-300 border border-yellow-800 px-2.5 py-0.5 rounded-full text-xs font-medium; }
+.badge-low    { @apply bg-green-900/60 text-green-300 border border-green-800 px-2.5 py-0.5 rounded-full text-xs font-medium; }
+.badge-none   { @apply bg-gray-800 text-gray-400 border border-gray-700 px-2.5 py-0.5 rounded-full text-xs font-medium; }
