@@ -4,7 +4,7 @@ import CropReportDownload from "@/components/CropReportDownload";
 import { stripReportMarkdown } from "@/lib/formatReport";
 import {
   Microscope, Cloud, AlertTriangle,
-  Thermometer, Droplets, Wind, Sparkles,
+  Thermometer, Droplets, Wind, Sparkles, Cpu,
 } from "lucide-react";
 
 const SEV_BADGE: Record<string, string> = {
@@ -118,6 +118,29 @@ export default function ScanResultsView({ log, isArchive }: Props) {
             </div>
           ) : (
             <p className="text-gray-500 text-sm">Could not identify plant species from this image.</p>
+          )}
+        </section>
+      )}
+
+      {/* IoT sensors */}
+      {log.iotData?.summary && (
+        <section className="card border-cyan-900/40">
+          <h3 className="font-semibold text-white flex items-center gap-2 mb-3">
+            <Cpu className="w-4 h-4 text-cyan-400" /> IoT Sensor Data
+            <span className="text-xs text-gray-500 font-normal uppercase">{log.iotData.format}</span>
+          </h3>
+          <div className="grid sm:grid-cols-2 gap-2">
+            {log.iotData.readings.map((r, i) => (
+              <div key={i} className="bg-gray-900/80 rounded-lg p-3 border border-cyan-900/20">
+                <p className="text-xs text-gray-500">{r.sensor}</p>
+                <p className="text-sm font-medium text-white">
+                  {r.value}{r.unit ? ` ${r.unit}` : ""}
+                </p>
+              </div>
+            ))}
+          </div>
+          {!log.iotData.readings.length && (
+            <p className="text-sm text-gray-400 whitespace-pre-wrap">{log.iotData.summary}</p>
           )}
         </section>
       )}

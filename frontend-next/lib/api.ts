@@ -126,11 +126,17 @@ export const api = {
       body: JSON.stringify(payload),
     }),
 
-  riskForecast: (crop: string, lat: number, lon: number, location: string) =>
+  riskForecast: (crop: string, lat: number, lon: number, location: string, iotData?: string) =>
     req<{ forecast: string; weather: WeatherData }>("/api/report/risk-forecast", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ crop, lat, lon, location }),
+      body: JSON.stringify({
+        crop,
+        lat,
+        lon,
+        location,
+        iot_data: iotData?.trim() || "",
+      }),
     }),
 
   // ── Languages ────────────────────────────────────────────────────────
@@ -260,4 +266,5 @@ export interface ReportRequest {
   lat?: number;
   lon?: number;
   location?: string;
+  iot_data?: string;
 }

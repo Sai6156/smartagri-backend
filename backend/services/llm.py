@@ -106,10 +106,11 @@ def generate_crop_report(
     prevention: str,
     weather: Optional[dict] = None,
     location: str = "",
+    iot_data: str = "",
 ) -> str:
-    """
-    Generate a comprehensive farm advisory report using LLM.
-    """
+    """Generate a comprehensive farm advisory report using LLM."""
+    from backend.services.iot_context import iot_prompt_block
+
     weather_context = ""
     if weather:
         weather_context = (
@@ -143,17 +144,20 @@ Location: {location or 'Not specified'}
 Known Remedies: {'; '.join(remedies)}
 Recommended Fertilizers: {'; '.join(fertilizers)}
 Prevention: {prevention}
-
+{iot_prompt_block(iot_data)}
 Include these sections (title in ALL CAPS, plain text only):
 EXECUTIVE SUMMARY
 DISEASE OVERVIEW
 IMMEDIATE ACTION PLAN
 TREATMENT SCHEDULE
 FERTILIZER AND NUTRITION PLAN
+IOT AND SOIL SENSOR INSIGHTS
 WEATHER-BASED RISK ASSESSMENT
 LONG-TERM PREVENTION STRATEGY
 WHEN TO CONSULT AN EXPERT
 
+If IoT sensor data was provided above, dedicate IOT AND SOIL SENSOR INSIGHTS to it.
+If no IoT data was provided, write "Not provided" for that section only.
 Make it actionable for a farmer. Use simple language. No markdown formatting.""",
         },
     ]
@@ -166,10 +170,11 @@ def generate_risk_forecast(
     location: str,
     weather: dict,
     recent_diseases: list[str],
+    iot_data: str = "",
 ) -> str:
-    """
-    Predict disease outbreak risk based on weather + crop + history using LLM.
-    """
+    """Predict disease outbreak risk based on weather + crop + history using LLM."""
+    from backend.services.iot_context import iot_prompt_block
+
     temp     = weather.get("temperature_c", "N/A")
     humidity = weather.get("humidity_pct", "N/A")
     rain     = weather.get("rain_1h_mm", weather.get("precip_mm", 0))
@@ -195,16 +200,17 @@ def generate_risk_forecast(
 **Location:** {location or 'India (general)'}
 **Current Weather:** {temp}°C, Humidity {humidity}%, Rain {rain}mm, {desc}
 **Recently Detected Diseases:** {recent_str}
-
+{iot_prompt_block(iot_data)}
 Provide:
 1. Overall Risk Level (LOW/MODERATE/HIGH/CRITICAL)
 2. Top 3 Most Likely Diseases to Outbreak (with reasoning)
 3. Weather Risk Factors Explained
-4. Preventive Spray Schedule for Next 2 Weeks
-5. Monitoring Checklist (what to look for daily)
-6. Emergency Response if Outbreak Starts
+4. IoT Sensor Risk Factors (if sensor data provided; otherwise note "No IoT data")
+5. Preventive Spray Schedule for Next 2 Weeks
+6. Monitoring Checklist (what to look for daily)
+7. Emergency Response if Outbreak Starts
 
-Format with markdown headers. Be specific to the crop and weather conditions.""",
+Format with markdown headers. Be specific to the crop, weather, and sensor readings.""",
         },
     ]
     result = chat_completion(messages, max_tokens=900, temperature=0.4)

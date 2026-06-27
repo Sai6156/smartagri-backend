@@ -5,6 +5,8 @@ import { resolveScanLocation } from "@/lib/location";
 import { ScanLog, saveScanLog } from "@/lib/scanLog";
 import ScanResultsView from "@/components/ScanResultsView";
 import LocationBar from "@/components/LocationBar";
+import IotSensorUpload from "@/components/IotSensorUpload";
+import { IotSensorData } from "@/lib/iotData";
 import { Upload, Loader2, CheckCircle2, Circle, Leaf, RotateCcw } from "lucide-react";
 
 interface Props {
@@ -29,6 +31,7 @@ export default function HomeHub({ lang, loadedLog, onNewScan }: Props) {
   const [error, setError] = useState("");
   const [stepStatus, setStepStatus] = useState<StepStatus[]>(PIPELINE.map(() => "pending"));
   const [preview, setPreview] = useState<string | null>(null);
+  const [iotData, setIotData] = useState<IotSensorData | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const runningRef = useRef(false);
 
@@ -36,6 +39,7 @@ export default function HomeHub({ lang, loadedLog, onNewScan }: Props) {
     if (loadedLog) {
       setActiveLog(loadedLog);
       setPreview(loadedLog.imageUrl);
+      setIotData(loadedLog.iotData ?? null);
       setStepStatus(PIPELINE.map(() => "done"));
       setError("");
     }
@@ -53,7 +57,7 @@ export default function HomeHub({ lang, loadedLog, onNewScan }: Props) {
     return resolveScanLocation((lat, lon) => api.reverseGeocode(lat, lon));
   }
 
-  async function runPipeline(file: File, imageUrl: string) {
+  async function runPipeline(file: File, imageUrl: string, iot: IotSensorData | null) {
     if (runningRef.current) return;
     runningRef.current = true;
     setRunning(true);
@@ -98,6 +102,7 @@ export default function HomeHub({ lang, loadedLog, onNewScan }: Props) {
 
       setStep(3, "running");
       let cropReport = "";
+      const iotSummary = iot?.summary?.trim() || "";
       try {
         const reportRes = await api.generateReport({
           class_name: prediction.class_name,
@@ -111,6 +116,7 @@ export default function HomeHub({ lang, loadedLog, onNewScan }: Props) {
           lat,
           lon,
           location: city,
+          iot_data: iotSummary,
         });
         cropReport = reportRes.report;
         if (!weather && reportRes.weather) weather = reportRes.weather;
@@ -122,7 +128,7 @@ export default function HomeHub({ lang, loadedLog, onNewScan }: Props) {
       setStep(4, "running");
       let riskForecast = "";
       try {
-        const riskRes = await api.riskForecast(prediction.crop, lat, lon, city);
+        const riskRes = await api.riskForecast(prediction.crop, lat, lon, city, iotSummary);
         riskForecast = riskRes.forecast;
         if (!weather && riskRes.weather) weather = riskRes.weather;
       } catch {
@@ -143,6 +149,7 @@ export default function HomeHub({ lang, loadedLog, onNewScan }: Props) {
         lat,
         lon,
         riskForecast,
+        iotData: iot,
       };
 
       saveScanLog(log);
@@ -167,12 +174,13 @@ export default function HomeHub({ lang, loadedLog, onNewScan }: Props) {
     onNewScan?.();
     const url = URL.createObjectURL(file);
     setPreview(url);
-    void runPipeline(file, url);
+    void runPipeline(file, url, iotData);
   }
 
   function handleReset() {
     setActiveLog(null);
     setPreview(null);
+    setIotData(null);
     setError("");
     setStepStatus(PIPELINE.map(() => "pending"));
     onNewScan?.();
@@ -191,10 +199,13 @@ export default function HomeHub({ lang, loadedLog, onNewScan }: Props) {
         </h1>
         <p className="text-gray-500 text-sm max-w-lg mx-auto">
           Upload one leaf image — we automatically run disease detection, plant ID, crop report, weather, and risk forecast.
+          Optionally attach IoT sensor readings for richer advice.
         </p>
       </div>
 
       <LocationBar />
+
+      <IotSensorUpload value={iotData} onChange={setIotData} disabled={running} />
 
       {/* Upload zone */}
       {(showUpload || running) && (

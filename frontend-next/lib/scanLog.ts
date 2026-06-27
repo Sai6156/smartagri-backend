@@ -1,4 +1,5 @@
 import { PredictResult, PlantIDResult, WeatherData } from "@/lib/api";
+import { IotSensorData } from "@/lib/iotData";
 
 export interface ScanLog {
   id: string;
@@ -13,6 +14,7 @@ export interface ScanLog {
   lat?: number;
   lon?: number;
   riskForecast?: string;
+  iotData?: IotSensorData | null;
 }
 
 const LOGS_KEY = "sa_scan_logs";
@@ -33,7 +35,12 @@ export function saveScanLog(log: ScanLog): void {
   localStorage.setItem(LOGS_KEY, JSON.stringify(logs.slice(0, MAX_LOGS)));
   localStorage.setItem(
     "sa_last_scan",
-    JSON.stringify({ result: log.prediction, imageUrl: log.imageUrl, timestamp: log.timestamp })
+    JSON.stringify({
+      result: log.prediction,
+      imageUrl: log.imageUrl,
+      timestamp: log.timestamp,
+      iotData: log.iotData ?? null,
+    })
   );
   window.dispatchEvent(new Event("sa-last-scan-updated"));
   window.dispatchEvent(new Event("sa-scan-logs-updated"));

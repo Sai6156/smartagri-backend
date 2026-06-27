@@ -1,9 +1,11 @@
 import { PredictResult } from "@/lib/api";
+import { formatIotContext, IotSensorData } from "@/lib/iotData";
 
 export interface LastScan {
   result: PredictResult;
   imageUrl?: string;
   timestamp?: string;
+  iotData?: IotSensorData | null;
 }
 
 export function loadLastScan(): LastScan | null {
@@ -35,6 +37,7 @@ export function buildScanContext(scan: LastScan): string {
     `Prevention: ${r.prevention}`,
     visual ? `Visual AI second opinion: ${visual}` : "",
     scan.timestamp ? `Scanned: ${new Date(scan.timestamp).toLocaleString()}` : "",
+    formatIotContext(scan.iotData),
   ]
     .filter(Boolean)
     .join("\n");

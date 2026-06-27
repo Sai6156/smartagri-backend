@@ -28,6 +28,7 @@ export async function downloadScanReportPdf(log: ScanLog): Promise<void> {
           lat,
           lon,
           location: city,
+          iot_data: log.iotData?.summary?.trim() || "",
         });
         report = res.report;
       } catch {

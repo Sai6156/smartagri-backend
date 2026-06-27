@@ -1,4 +1,6 @@
-from fastapi import APIRouterfrom pydantic import BaseModel
+from fastapi import APIRouter
+from pydantic import BaseModel
+
 from backend.services.llm import generate_crop_report, generate_risk_forecast
 from backend.services.weather_service import fetch_weather_summary
 from backend.db import get_history
@@ -18,6 +20,7 @@ class ReportRequest(BaseModel):
     lat:          float = 0.0
     lon:          float = 0.0
     location:     str   = ""
+    iot_data:     str   = ""
 
 
 class RiskRequest(BaseModel):
@@ -25,6 +28,7 @@ class RiskRequest(BaseModel):
     lat:      float = 0.0
     lon:      float = 0.0
     location: str   = ""
+    iot_data: str   = ""
 
 
 @router.post("/generate")
@@ -46,6 +50,7 @@ async def generate_report(req: ReportRequest):
         prevention=req.prevention,
         weather=weather,
         location=location,
+        iot_data=req.iot_data,
     )
 
     return {
@@ -78,6 +83,7 @@ async def risk_forecast(req: RiskRequest):
         location=location,
         weather=weather,
         recent_diseases=recent_diseases,
+        iot_data=req.iot_data,
     )
 
     return {
