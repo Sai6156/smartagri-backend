@@ -4,7 +4,7 @@
  * Falls back to browser speech recognition if OpenRouter STT credits are low.
  */
 
-import { STTRecorder, SPEECH_LANG_MAP } from "@/lib/speech";
+import { STTRecorder, SPEECH_LANG_MAP, TTSPlayer } from "@/lib/speech";
 
 const BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
 
@@ -85,24 +85,40 @@ export function playAudioBlob(blob: Blob, onEnd?: () => void): HTMLAudioElement 
 }
 
 let currentAudio: HTMLAudioElement | null = null;
+let browserTts: TTSPlayer | null = null;
 
 export function stopAudio(): void {
   if (currentAudio) {
     currentAudio.pause();
     currentAudio = null;
   }
+  browserTts?.stop();
+  browserTts = null;
+}
+
+function browserSpeak(text: string, language: string, onEnd?: () => void): void {
+  browserTts = new TTSPlayer();
+  const bcp47 = SPEECH_LANG_MAP[language] || language;
+  browserTts.speak(text, bcp47, onEnd);
 }
 
 export async function speakText(text: string, language: string, onEnd?: () => void): Promise<void> {
   stopAudio();
-  const res = await fetch(`${BASE}/api/voice/tts`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...authHeader() },
-    body: JSON.stringify({ text, language }),
-  });
-  if (!res.ok) throw new Error("TTS failed");
-  const blob = await res.blob();
-  currentAudio = playAudioBlob(blob, onEnd);
+  try {
+    const res = await fetch(`${BASE}/api/voice/tts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeader() },
+      body: JSON.stringify({ text, language }),
+    });
+    if (!res.ok) throw new Error("TTS API failed");
+    const ct = res.headers.get("content-type") || "";
+    if (!ct.includes("audio")) throw new Error("TTS returned non-audio response");
+    const blob = await res.blob();
+    if (blob.size < 500) throw new Error("TTS audio too short");
+    currentAudio = playAudioBlob(blob, onEnd);
+  } catch {
+    browserSpeak(text, language, onEnd);
+  }
 }
 
 export async function transcribeAudio(blob: Blob): Promise<STTResult> {

@@ -66,7 +66,7 @@ async def text_to_speech(req: TTSRequest):
     """Synthesize speech in the given language. Returns MP3."""
     audio = synthesize_speech(req.text, req.language)
     if not audio:
-        raise HTTPException(status_code=502, detail="TTS failed. Check OpenRouter API key.")
+        raise HTTPException(status_code=502, detail="TTS failed for this language.")
     return StreamingResponse(io.BytesIO(audio), media_type="audio/mpeg")
 
 

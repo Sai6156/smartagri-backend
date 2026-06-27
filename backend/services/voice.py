@@ -1,12 +1,12 @@
 """
 Voice pipeline via OpenRouter:
 - STT:  /api/v1/audio/transcriptions  (Whisper)
-- TTS:  /api/v1/audio/speech
+- TTS:  gTTS (reads exact text in target language) + optional OpenRouter
 - Chat: Gemma with reply-in-same-language instruction
 """
 
 import base64
-import json
+import io
 import os
 import re
 from typing import Optional
@@ -16,7 +16,8 @@ import requests
 from backend.services.llm import OPENROUTER_BASE, DEFAULT_MODEL, _headers, chat_completion
 
 STT_MODEL = "openai/whisper-1"
-TTS_MODEL = os.getenv("OPENROUTER_TTS_MODEL", "sesame/csm-1b")
+# sesame/csm-1b is conversational — NOT faithful TTS. Only use explicit OpenRouter TTS models.
+TTS_MODEL = os.getenv("OPENROUTER_TTS_MODEL", "")
 
 LANG_NAMES: dict[str, str] = {
     "en": "English", "te": "Telugu", "hi": "Hindi", "ta": "Tamil",
@@ -29,7 +30,14 @@ LANG_NAMES: dict[str, str] = {
     "ms": "Malay", "ne": "Nepali",
 }
 
-# ISO-639-1 → OpenAI TTS voice (multilingual via instructions)
+# ISO-639-1 → gTTS language code (most are identical)
+GTTS_LANG_MAP: dict[str, str] = {
+    "fil": "tl",
+    "zh": "zh-CN",
+    "pt": "pt",
+    "sw": "sw",
+}
+
 TTS_VOICES = {
     "en": "alloy", "es": "nova", "fr": "shimmer", "de": "echo",
     "it": "fable", "pt": "onyx", "ja": "nova", "ko": "shimmer",
@@ -121,22 +129,43 @@ def _detect_lang_from_text(text: str) -> Optional[str]:
     return code if len(code) == 2 else None
 
 
-def synthesize_speech(text: str, lang: str = "en") -> Optional[bytes]:
-    """Generate speech audio via OpenRouter TTS. Returns MP3 bytes."""
-    key = _api_key()
-    if not key or not text.strip():
+def _gtts_speech(text: str, lang: str) -> Optional[bytes]:
+    """Faithful multilingual TTS — speaks the exact reply text."""
+    try:
+        from gtts import gTTS
+        from gtts.lang import tts_langs
+
+        code = GTTS_LANG_MAP.get(lang, lang)
+        supported = tts_langs()
+        if code not in supported:
+            # try base code without region
+            if code.split("-")[0] not in supported:
+                return None
+            code = code.split("-")[0]
+
+        buf = io.BytesIO()
+        gTTS(text=text, lang=code, slow=False).write_to_fp(buf)
+        data = buf.getvalue()
+        return data if len(data) > 500 else None
+    except Exception:
         return None
 
-    lang = (lang or "en").lower()[:2]
-    voice = TTS_VOICES.get(lang, TTS_VOICES["default"])
 
+def _openrouter_speech(text: str, lang: str) -> Optional[bytes]:
+    """Optional OpenRouter TTS when a proper model is configured."""
+    if not TTS_MODEL or TTS_MODEL == "sesame/csm-1b":
+        return None
+    key = _api_key()
+    if not key:
+        return None
+
+    voice = TTS_VOICES.get(lang, TTS_VOICES["default"])
     payload = {
         "model": TTS_MODEL,
         "input": text,
         "voice": voice,
         "response_format": "mp3",
     }
-
     try:
         resp = requests.post(
             f"{OPENROUTER_BASE}/audio/speech",
@@ -144,11 +173,26 @@ def synthesize_speech(text: str, lang: str = "en") -> Optional[bytes]:
             headers=_headers(),
             timeout=90,
         )
-        if resp.status_code == 200 and resp.content:
+        ct = resp.headers.get("content-type", "")
+        if resp.status_code == 200 and resp.content and "audio" in ct:
             return resp.content
         return None
     except Exception:
         return None
+
+
+def synthesize_speech(text: str, lang: str = "en") -> Optional[bytes]:
+    """Generate speech MP3 in the given language. Reads the exact text aloud."""
+    if not text.strip():
+        return None
+
+    lang = (lang or "en").lower()[:2]
+
+    audio = _gtts_speech(text, lang)
+    if audio:
+        return audio
+
+    return _openrouter_speech(text, lang)
 
 
 def detect_language(text: str) -> str:
