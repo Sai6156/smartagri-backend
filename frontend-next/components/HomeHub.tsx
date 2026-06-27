@@ -1,9 +1,10 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
-import { getBrowserGps, loadUserLocation, saveUserLocation } from "@/lib/location";
+import { resolveScanLocation } from "@/lib/location";
 import { ScanLog, saveScanLog } from "@/lib/scanLog";
 import ScanResultsView from "@/components/ScanResultsView";
+import LocationBar from "@/components/LocationBar";
 import { Upload, Loader2, CheckCircle2, Circle, Leaf, RotateCcw } from "lucide-react";
 
 interface Props {
@@ -49,24 +50,7 @@ export default function HomeHub({ lang, loadedLog, onNewScan }: Props) {
   }, []);
 
   async function resolveLocation(): Promise<{ lat: number; lon: number; city: string }> {
-    const saved = loadUserLocation();
-    if (saved) return { lat: saved.lat, lon: saved.lon, city: saved.city };
-
-    try {
-      const gps = await getBrowserGps();
-      const geo = await api.reverseGeocode(gps.lat, gps.lon);
-      saveUserLocation({
-        lat: gps.lat,
-        lon: gps.lon,
-        city: geo.city,
-        region: geo.region,
-        country: geo.country,
-        source: "gps",
-      });
-      return { lat: gps.lat, lon: gps.lon, city: geo.city };
-    } catch {
-      return { lat: 17.385, lon: 78.4867, city: "Hyderabad" };
-    }
+    return resolveScanLocation((lat, lon) => api.reverseGeocode(lat, lon));
   }
 
   async function runPipeline(file: File, imageUrl: string) {
@@ -91,7 +75,16 @@ export default function HomeHub({ lang, loadedLog, onNewScan }: Props) {
       }
       setStep(1, "done");
 
-      const { lat, lon, city } = await resolveLocation();
+      let lat: number, lon: number, city: string;
+      try {
+        ({ lat, lon, city } = await resolveLocation());
+      } catch (e) {
+        throw new Error(
+          e instanceof Error
+            ? e.message
+            : "Set your location using GPS or search your city (e.g. Warangal) before scanning."
+        );
+      }
 
       setStep(2, "running");
       let weather = null;
@@ -197,6 +190,8 @@ export default function HomeHub({ lang, loadedLog, onNewScan }: Props) {
           Upload one leaf image — we automatically run disease detection, plant ID, crop report, weather, and risk forecast.
         </p>
       </div>
+
+      <LocationBar />
 
       {/* Upload zone */}
       {(showUpload || running) && (

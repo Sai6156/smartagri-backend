@@ -94,7 +94,7 @@ export default function WeatherMonitor({ lang: _lang, speechLang }: Props) {
   useEffect(() => {
     const saved = loadUserLocation();
     if (saved) {
-      fetchWeatherFor({ ...saved, source: "saved" });
+      fetchWeatherFor(saved);
     } else {
       useGps();
     }

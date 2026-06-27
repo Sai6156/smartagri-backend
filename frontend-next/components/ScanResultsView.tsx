@@ -1,8 +1,11 @@
 "use client";
+import { useState } from "react";
 import { ScanLog } from "@/lib/scanLog";
+import { downloadCropReportPdf } from "@/lib/cropReportPdf";
+import { stripReportMarkdown } from "@/lib/formatReport";
 import {
   Microscope, Cloud, FileText, AlertTriangle,
-  Thermometer, Droplets, Wind, Sparkles,
+  Thermometer, Droplets, Wind, Sparkles, Download,
 } from "lucide-react";
 
 const SEV_BADGE: Record<string, string> = {
@@ -16,6 +19,17 @@ interface Props {
 
 export default function ScanResultsView({ log, isArchive }: Props) {
   const p = log.prediction;
+  const [downloading, setDownloading] = useState(false);
+
+  function handleDownloadReport() {
+    if (!log.cropReport?.trim()) return;
+    setDownloading(true);
+    try {
+      downloadCropReportPdf(log);
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
@@ -149,14 +163,27 @@ export default function ScanResultsView({ log, isArchive }: Props) {
         </section>
       )}
 
-      {/* Crop report */}
-      {log.cropReport && (
-        <section className="card">
-          <h3 className="font-semibold text-white flex items-center gap-2 mb-3">
-            <FileText className="w-4 h-4 text-amber-400" /> AI Crop Report
-          </h3>
-          <div className="prose-sm text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">
-            {log.cropReport}
+      {/* Crop report — PDF download only */}
+      {log.cropReport?.trim() && !log.cropReport.startsWith("Report could not") && (
+        <section className="card border-amber-900/30">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h3 className="font-semibold text-white flex items-center gap-2">
+                <FileText className="w-4 h-4 text-amber-400" /> AI Crop Report
+              </h3>
+              <p className="text-sm text-gray-500 mt-1">
+                Professional PDF report ready — includes disease analysis, treatment plan, and weather advisory.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleDownloadReport}
+              disabled={downloading}
+              className="btn-primary flex items-center gap-2 text-sm"
+            >
+              <Download className="w-4 h-4" />
+              {downloading ? "Preparing…" : "Download PDF"}
+            </button>
           </div>
         </section>
       )}
@@ -168,7 +195,7 @@ export default function ScanResultsView({ log, isArchive }: Props) {
             <AlertTriangle className="w-4 h-4 text-yellow-400" /> Disease Risk Forecaster
           </h3>
           <div className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">
-            {log.riskForecast}
+            {stripReportMarkdown(log.riskForecast)}
           </div>
         </section>
       )}

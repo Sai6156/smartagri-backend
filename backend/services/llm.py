@@ -124,7 +124,8 @@ def generate_crop_report(
             "content": (
                 "You are an expert agricultural scientist and farm advisor. "
                 "Write a professional, detailed farm advisory report based on a disease detection result. "
-                "Format the report with clear sections using markdown headers. "
+                "Use PLAIN TEXT ONLY — no markdown, no asterisks, no hash symbols, no bullet dashes. "
+                "Put each section title on its own line in ALL CAPS, then a blank line, then the section body. "
                 "Be specific, practical, and include timelines for treatments."
             ),
         },
@@ -132,28 +133,28 @@ def generate_crop_report(
             "role": "user",
             "content": f"""Write a comprehensive farm advisory report for the following detection:
 
-**Disease Detected:** {disease_name}
-**Crop:** {crop}
-**AI Confidence:** {confidence:.1f}%
-**Severity:** {severity}
-**Location:** {location or 'Not specified'}
+Disease Detected: {disease_name}
+Crop: {crop}
+AI Confidence: {confidence:.1f}%
+Severity: {severity}
+Location: {location or 'Not specified'}
 {weather_context}
 
-**Known Remedies:** {'; '.join(remedies)}
-**Recommended Fertilizers:** {'; '.join(fertilizers)}
-**Prevention:** {prevention}
+Known Remedies: {'; '.join(remedies)}
+Recommended Fertilizers: {'; '.join(fertilizers)}
+Prevention: {prevention}
 
-Include these sections:
-1. Executive Summary
-2. Disease Overview (cause, spread mechanism, economic impact)
-3. Immediate Action Plan (next 24-48 hours)
-4. Treatment Schedule (weekly plan for 4 weeks)
-5. Fertilizer & Nutrition Plan
-6. Weather-Based Risk Assessment
-7. Long-Term Prevention Strategy
-8. When to Consult an Expert
+Include these sections (title in ALL CAPS, plain text only):
+EXECUTIVE SUMMARY
+DISEASE OVERVIEW
+IMMEDIATE ACTION PLAN
+TREATMENT SCHEDULE
+FERTILIZER AND NUTRITION PLAN
+WEATHER-BASED RISK ASSESSMENT
+LONG-TERM PREVENTION STRATEGY
+WHEN TO CONSULT AN EXPERT
 
-Make it actionable for a farmer. Use simple language.""",
+Make it actionable for a farmer. Use simple language. No markdown formatting.""",
         },
     ]
     result = chat_completion(messages, max_tokens=1200, temperature=0.5)
