@@ -7,15 +7,12 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 # Load .env — try multiple locations to be robust
-for _env_path in [
-    Path(__file__).resolve().parent.parent / ".env",  # project root relative to this file
-    Path.cwd() / ".env",                               # current working directory
-    Path(__file__).resolve().parent / ".env",          # backend/ folder
-]:
+root = Path(__file__).resolve().parent.parent
+for _env_name in [".env", "secrets.env"]:
+    _env_path = root / _env_name
     if _env_path.exists():
         load_dotenv(_env_path, override=True)
         print(f"[ENV] Loaded: {_env_path}")
-        break
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware

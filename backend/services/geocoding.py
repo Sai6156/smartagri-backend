@@ -1,10 +1,12 @@
 """
 Geocoding optimised for Indian locations.
-Chain: WeatherAPI → Open-Meteo Geocoding → OpenStreetMap Nominatim (countrycodes=in)
+Chain: Mappls → WeatherAPI → Open-Meteo → OpenStreetMap Nominatim
 """
 
 import os
 import requests
+
+from backend.services import mappls as mappls_svc
 
 NOMINATIM_URL = "https://nominatim.openstreetmap.org"
 OPEN_METEO_GEO = "https://geocoding-api.open-meteo.com/v1"
@@ -42,6 +44,18 @@ def search_city(q: str, limit: int = 8) -> list[dict]:
             "label": _label(city, region, country),
             "source": source,
         })
+
+    # 0) Mappls — best India coverage (Warangal, villages, districts)
+    if mappls_svc.is_configured():
+        for p in mappls_svc.search_places(q, limit=limit):
+            add(
+                float(p["lat"]),
+                float(p["lon"]),
+                p.get("city", q),
+                p.get("region", ""),
+                p.get("country", "India"),
+                "mappls",
+            )
 
     # 1) WeatherAPI — strong Indian district/town coverage
     wa_key = os.getenv("WEATHERAPI_KEY", "")
@@ -122,7 +136,7 @@ def search_city(q: str, limit: int = 8) -> list[dict]:
         pass
 
     # Prefer India results, then by source quality
-    source_rank = {"weatherapi": 0, "open-meteo": 1, "nominatim": 2}
+    source_rank = {"mappls": 0, "weatherapi": 1, "open-meteo": 2, "nominatim": 3}
     results.sort(
         key=lambda r: (
             0 if "india" in r.get("country", "").lower() or r.get("country") == "IN" else 1,
@@ -134,9 +148,15 @@ def search_city(q: str, limit: int = 8) -> list[dict]:
 
 def reverse_geocode(lat: float, lon: float) -> dict:
     """Reverse geocode coordinates to city/region."""
+    # 1) Mappls — most accurate for Indian GPS → address
+    if mappls_svc.is_configured():
+        m = mappls_svc.reverse_geocode(lat, lon)
+        if m and m.get("city") and m["city"] != "Your location":
+            return m
+
     wa_key = os.getenv("WEATHERAPI_KEY", "")
 
-    # 1) WeatherAPI — location block from current weather lookup
+    # 2) WeatherAPI — location block from current weather lookup
     if wa_key:
         try:
             resp = requests.get(
@@ -159,7 +179,7 @@ def reverse_geocode(lat: float, lon: float) -> dict:
         except Exception:
             pass
 
-    # 2) Nominatim reverse
+    # 3) Nominatim reverse
     try:
         resp = requests.get(
             f"{NOMINATIM_URL}/reverse",
