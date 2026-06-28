@@ -7,6 +7,7 @@ from backend.services.translator import translate_disease_name, translate_label,
 from backend.services.llm import visual_disease_possibilities
 from backend.db import save_prediction
 from backend.routes.auth import get_current_user
+from backend.services.thumbnail import image_bytes_to_thumbnail_data_url
 
 router = APIRouter(prefix="/api", tags=["prediction"])
 
@@ -132,6 +133,7 @@ async def predict_disease(
         "dataset_prediction": dataset_prediction,
         "filename":       file.filename,
         "user_id":        user_id,
+        "image_data":     image_bytes_to_thumbnail_data_url(image_bytes),
         "language":       lang,
         "labels": {
             "disease":    translate_label("Disease Detected", lang),

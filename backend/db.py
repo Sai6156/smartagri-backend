@@ -182,22 +182,18 @@ def init_db():
 
 def save_prediction(pred: dict):
     con = _conn()
+    insert_sql = """
+        INSERT INTO predictions
+            (user_id, timestamp, filename, class_name, display_name, crop,
+             confidence, severity, remedies, fertilizers, prevention, description, top5,
+             visual_diagnosis, report, dataset_prediction, image_data)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """
+    if USE_POSTGRES:
+        insert_sql += " RETURNING id"
     cur = _execute(
         con,
-        """
-        INSERT INTO predictions
-            (user_id, timestamp, filename, class_name, display_name, crop,
-             confidence, severity, remedies, fertilizers, prevention, description, top5,
-             visual_diagnosis, report, dataset_prediction)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        RETURNING id
-        """ if USE_POSTGRES else """
-        INSERT INTO predictions
-            (user_id, timestamp, filename, class_name, display_name, crop,
-             confidence, severity, remedies, fertilizers, prevention, description, top5,
-             visual_diagnosis, report, dataset_prediction)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
+        insert_sql,
         (
             pred.get("user_id", "anonymous"),
             datetime.now(timezone.utc).isoformat(),
@@ -215,6 +211,7 @@ def save_prediction(pred: dict):
             json.dumps(pred.get("visual_diagnosis", [])),
             pred.get("report", ""),
             json.dumps(pred.get("dataset_prediction") or {}),
+            pred.get("image_data", "") or "",
         ),
     )
     if USE_POSTGRES:
@@ -243,26 +240,48 @@ def update_prediction(pred_id: int, user_id: str, payload: dict) -> bool:
     }
     scan_report_json = json.dumps(scan_report)
 
+    image_data = payload.get("image_data")
+    has_image = bool(image_data and str(image_data).strip())
+
     con = _conn()
-    _execute(
-        con,
-        """
-        UPDATE predictions SET
-            image_data = COALESCE(?, image_data),
-            plant_json = COALESCE(?, plant_json),
-            weather_json = COALESCE(?, weather_json),
-            scan_report_json = ?
-        WHERE id = ? AND user_id = ?
-        """,
-        (
-            payload.get("image_data"),
-            plant_json,
-            weather_json,
-            scan_report_json,
-            pred_id,
-            user_id,
-        ),
-    )
+    if has_image:
+        _execute(
+            con,
+            """
+            UPDATE predictions SET
+                image_data = ?,
+                plant_json = COALESCE(?, plant_json),
+                weather_json = COALESCE(?, weather_json),
+                scan_report_json = ?
+            WHERE id = ? AND user_id = ?
+            """,
+            (
+                image_data,
+                plant_json,
+                weather_json,
+                scan_report_json,
+                pred_id,
+                user_id,
+            ),
+        )
+    else:
+        _execute(
+            con,
+            """
+            UPDATE predictions SET
+                plant_json = COALESCE(?, plant_json),
+                weather_json = COALESCE(?, weather_json),
+                scan_report_json = ?
+            WHERE id = ? AND user_id = ?
+            """,
+            (
+                plant_json,
+                weather_json,
+                scan_report_json,
+                pred_id,
+                user_id,
+            ),
+        )
     con.commit()
     con.close()
     return True

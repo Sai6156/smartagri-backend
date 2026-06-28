@@ -23,7 +23,7 @@ function ScanThumbnail({ imageUrl }: { imageUrl: string }) {
 
   if (!imageUrl || broken) {
     return (
-      <div className="w-14 h-14 rounded-lg bg-gray-800 flex items-center justify-center flex-shrink-0">
+      <div className="w-16 h-16 rounded-lg bg-gray-800 border border-gray-700 flex items-center justify-center flex-shrink-0">
         <ImageOff className="w-5 h-5 text-gray-600" />
       </div>
     );
@@ -33,7 +33,9 @@ function ScanThumbnail({ imageUrl }: { imageUrl: string }) {
     <img
       src={imageUrl}
       alt=""
-      className="w-14 h-14 rounded-lg object-cover bg-gray-800 flex-shrink-0"
+      className="w-16 h-16 rounded-lg object-cover bg-gray-800 border border-gray-700/80 flex-shrink-0"
+      loading="lazy"
+      decoding="async"
       onError={() => setBroken(true)}
     />
   );

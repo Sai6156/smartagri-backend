@@ -23,7 +23,45 @@ export async function fileToPersistedImageUrl(file: File): Promise<string> {
 
 export function isPersistedImageUrl(url?: string | null): boolean {
   if (!url) return false;
-  return url.startsWith("data:image/");
+  return url.trim().startsWith("data:image/");
+}
+
+/** Normalize server/local image values into a displayable data URL. */
+export function normalizeImageUrl(url?: string | null): string {
+  if (!url) return "";
+  const trimmed = url.trim();
+  if (isPersistedImageUrl(trimmed)) return trimmed;
+  // Raw base64 from older rows
+  if (trimmed.length > 64 && /^[A-Za-z0-9+/=\s]+$/.test(trimmed.slice(0, 64))) {
+    return `data:image/jpeg;base64,${trimmed.replace(/\s/g, "")}`;
+  }
+  return "";
+}
+
+/** Smaller JPEG for PUT /api/predictions sync (server already has predict-time thumb). */
+export async function compressDataUrlForSync(dataUrl: string): Promise<string> {
+  if (!isPersistedImageUrl(dataUrl)) return dataUrl;
+  const objectUrl = URL.createObjectURL(await dataUrlToBlob(dataUrl));
+  try {
+    const img = await loadImage(objectUrl);
+    const { width, height } = fitWithin(img.naturalWidth, img.naturalHeight, 160);
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return dataUrl;
+    ctx.drawImage(img, 0, 0, width, height);
+    return canvas.toDataURL("image/jpeg", 0.72);
+  } catch {
+    return dataUrl;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
+  const res = await fetch(dataUrl);
+  return res.blob();
 }
 
 function fitWithin(w: number, h: number, max: number) {
