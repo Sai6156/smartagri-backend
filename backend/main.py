@@ -22,6 +22,7 @@ from backend.routes.predict   import router as predict_router
 from backend.routes.weather   import router as weather_router
 from backend.routes.chat      import router as chat_router
 from backend.routes.history   import router as history_router
+from backend.routes.scans     import router as scans_router
 from backend.routes.report    import router as report_router
 from backend.routes.auth      import router as auth_router
 from backend.routes.translate import router as translate_router
@@ -51,6 +52,7 @@ app.include_router(predict_router)
 app.include_router(weather_router)
 app.include_router(chat_router)
 app.include_router(history_router)
+app.include_router(scans_router)
 app.include_router(report_router)
 app.include_router(translate_router)
 app.include_router(voice_router)
@@ -75,6 +77,7 @@ async def root():
             "POST /api/report/risk-forecast",
             "GET  /api/history",
             "GET  /api/stats",
+            "PUT  /api/predictions/{id}",
             "GET  /api/model-status",
         ],
     }

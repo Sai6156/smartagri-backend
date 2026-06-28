@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { resolveScanLocation } from "@/lib/location";
-import { ScanLog, saveScanLog } from "@/lib/scanLog";
+import { ScanLog, saveScanLog, syncScanLogToServer } from "@/lib/scanLog";
 import ScanResultsView from "@/components/ScanResultsView";
 import LocationBar from "@/components/LocationBar";
 import IotSensorUpload from "@/components/IotSensorUpload";
@@ -155,6 +155,7 @@ export default function HomeHub({ lang, loadedLog, onNewScan }: Props) {
 
       saveScanLog(log);
       setActiveLog(log);
+      await syncScanLogToServer(log);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Analysis failed";
       setError(msg);

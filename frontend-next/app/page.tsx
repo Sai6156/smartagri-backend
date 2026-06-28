@@ -17,6 +17,11 @@ export default function AuthPage() {
 
   useEffect(() => {
     if (getUser()) router.replace("/dashboard");
+    const msg = sessionStorage.getItem("sa_auth_message");
+    if (msg) {
+      setError(msg);
+      sessionStorage.removeItem("sa_auth_message");
+    }
   }, [router]);
 
   async function submit(e: React.FormEvent) {

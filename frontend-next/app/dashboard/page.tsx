@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { getUser, logout, saveUser } from "@/lib/auth";
 import { api } from "@/lib/api";
 import { SPEECH_LANG_MAP } from "@/lib/speech";
-import { ScanLog } from "@/lib/scanLog";
+import { ScanLog, syncScanLogsFromServer } from "@/lib/scanLog";
 import LanguageSelector from "@/components/LanguageSelector";
 import HomeHub from "@/components/HomeHub";
 import HistoryStats from "@/components/HistoryStats";
@@ -38,16 +38,28 @@ export default function Dashboard() {
     }
     api.auth
       .me()
-      .then((profile) => {
+      .then(async (profile) => {
         saveUser({ ...local, ...profile, token: local.token });
         setUser(profile);
         const saved = localStorage.getItem("sa_lang");
         if (saved) setLang(saved);
+        await syncScanLogsFromServer();
       })
       .catch(() => {
         logout();
         router.replace("/");
       });
+  }, [router]);
+
+  useEffect(() => {
+    const onAuthExpired = (e: Event) => {
+      const detail = (e as CustomEvent<string>).detail;
+      sessionStorage.setItem("sa_auth_message", detail || "Session expired. Please sign in again.");
+      logout();
+      router.replace("/");
+    };
+    window.addEventListener("sa-auth-expired", onAuthExpired);
+    return () => window.removeEventListener("sa-auth-expired", onAuthExpired);
   }, [router]);
 
   const handleLangChange = useCallback((l: string) => {

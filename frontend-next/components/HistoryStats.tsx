@@ -1,8 +1,14 @@
 ﻿"use client";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { api, StatsData } from "@/lib/api";
-import { loadScanLogs, ScanLog } from "@/lib/scanLog";
-import { Loader2, History, ChevronRight, ImageOff } from "lucide-react";
+import {
+  loadScanLogs,
+  logsFromStatsFallback,
+  mergeScanLogs,
+  scanLogsStorageKey,
+  ScanLog,
+} from "@/lib/scanLog";
+import { Loader2, History, ChevronRight, ImageOff, RefreshCw, AlertTriangle } from "lucide-react";
 
 interface Props {
   onOpenLog: (log: ScanLog) => void;
@@ -37,21 +43,72 @@ export default function HistoryStats({ onOpenLog }: Props) {
   const [localLogs, setLocalLogs] = useState<ScanLog[]>([]);
   const [stats, setStats] = useState<StatsData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    setError(null);
+    const local = loadScanLogs();
+    let statsData: StatsData | null = null;
+    let apiHistory: Awaited<ReturnType<typeof api.history>> = [];
+    let statsErr: string | null = null;
+    let historyErr: string | null = null;
+
+    try {
+      statsData = await api.stats();
+      setStats(statsData);
+    } catch (e) {
+      statsErr = e instanceof Error ? e.message : "Could not load stats";
+      setStats(null);
+    }
+
+    try {
+      apiHistory = await api.history();
+    } catch (e) {
+      historyErr = e instanceof Error ? e.message : "Could not load history";
+      apiHistory = [];
+    }
+
+    let merged = mergeScanLogs(local, apiHistory);
+    if (merged.length === 0 && statsData && statsData.total_predictions > 0) {
+      merged = logsFromStatsFallback(statsData);
+    }
+    setLocalLogs(merged);
+
+    if (statsErr && historyErr && merged.length === 0) {
+      setError(
+        `${statsErr}. ${historyErr}. Sign out and sign in again, or retry if the server is waking up.`
+      );
+    } else if (historyErr && merged.length === 0 && !statsData?.total_predictions) {
+      setError(historyErr);
+    }
+  }, []);
 
   useEffect(() => {
-    const refresh = () => setLocalLogs(loadScanLogs());
-    refresh();
-    window.addEventListener("sa-scan-logs-updated", refresh);
-    window.addEventListener("sa-user-changed", refresh);
-    api.stats()
-      .then(setStats)
-      .catch(() => setStats(null))
-      .finally(() => setLoading(false));
-    return () => {
-      window.removeEventListener("sa-scan-logs-updated", refresh);
-      window.removeEventListener("sa-user-changed", refresh);
+    refresh().finally(() => setLoading(false));
+
+    const onLocalUpdate = () => {
+      void refresh();
     };
-  }, []);
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === scanLogsStorageKey() || e.key === "sa_user") {
+        void refresh();
+      }
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void refresh();
+    };
+
+    window.addEventListener("sa-scan-logs-updated", onLocalUpdate);
+    window.addEventListener("sa-user-changed", onLocalUpdate);
+    window.addEventListener("storage", onStorage);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("sa-scan-logs-updated", onLocalUpdate);
+      window.removeEventListener("sa-user-changed", onLocalUpdate);
+      window.removeEventListener("storage", onStorage);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [refresh]);
 
   const displayLogs = useMemo(() => {
     return [...localLogs].sort(
@@ -73,10 +130,29 @@ export default function HistoryStats({ onOpenLog }: Props) {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
+      {error && (
+        <div className="card border border-amber-800/50 bg-amber-950/20 flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-amber-200 text-sm">{error}</p>
+            <button
+              type="button"
+              onClick={() => {
+                setLoading(true);
+                refresh().finally(() => setLoading(false));
+              }}
+              className="mt-2 inline-flex items-center gap-1.5 text-xs text-amber-400 hover:text-amber-300"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Retry
+            </button>
+          </div>
+        </div>
+      )}
+
       {stats && (
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
           <div className="card text-center">
-            <p className="text-3xl font-bold text-green-400">{displayLogs.length || stats.total_predictions}</p>
+            <p className="text-3xl font-bold text-green-400">{stats.total_predictions}</p>
             <p className="text-gray-500 text-sm mt-1">Total Scans</p>
           </div>
           <div className="card text-center">
@@ -103,7 +179,9 @@ export default function HistoryStats({ onOpenLog }: Props) {
 
         {displayLogs.length === 0 ? (
           <p className="text-gray-600 text-sm text-center py-12">
-            No scans yet. Upload a leaf image on Home to get started.
+            {error
+              ? "Could not load your scans from the server."
+              : "No scans yet. Upload a leaf image on Home to get started."}
           </p>
         ) : (
           <div className="space-y-2">

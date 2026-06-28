@@ -5,6 +5,10 @@ services:
     buildCommand: pip install -r backend/requirements.txt
     startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
     envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: smartagri-db
+          property: connectionString
       - key: JWT_SECRET
         sync: false
       - key: OPENWEATHER_API_KEY
@@ -25,3 +29,9 @@ services:
         sync: false
       - key: WEATHERAPI_KEY
         sync: false
+
+databases:
+  - name: smartagri-db
+    plan: free
+    databaseName: smartagri
+    user: smartagri

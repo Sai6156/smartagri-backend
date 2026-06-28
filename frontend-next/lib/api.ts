@@ -29,6 +29,7 @@ async function req<T>(path: string, opts: RequestInit = {}, timeoutMs = 90000): 
       if (res.status === 401 && typeof window !== "undefined") {
         localStorage.removeItem("sa_token");
         localStorage.removeItem("sa_user");
+        window.dispatchEvent(new CustomEvent("sa-auth-expired", { detail: message }));
       }
       throw new Error(message || "Request failed");
     }
@@ -129,6 +130,13 @@ export const api = {
   // ── History / Stats ──────────────────────────────────────────────────
   history: (limit = 30) => req<HistoryEntry[]>(`/api/history?limit=${limit}`),
   stats: () => req<StatsData>("/api/stats"),
+
+  updatePrediction: (id: number, payload: PredictionUpdatePayload) =>
+    req<{ ok: boolean; id: number }>(`/api/predictions/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
 
   // ── AI Report / Risk ─────────────────────────────────────────────────
   generateReport: (payload: ReportRequest) =>
@@ -274,12 +282,44 @@ export interface HistoryEntry {
   visual_diagnosis: VisualDiagnosis[];
   dataset_prediction?: DatasetPrediction | null;
   report?: string;
+  image_data?: string;
+  plant_json?: PlantIDResult | null;
+  weather_json?: WeatherData | null;
+  scan_report_json?: ScanReportJson | null;
+}
+
+export interface ScanReportJson {
+  cropReport?: string;
+  riskForecast?: string;
+  weatherLocation?: string;
+  lat?: number;
+  lon?: number;
+  iotData?: unknown;
+}
+
+export interface PredictionUpdatePayload {
+  image_data?: string;
+  plant?: PlantIDResult | null;
+  weather?: WeatherData | null;
+  crop_report?: string;
+  risk_forecast?: string;
+  iot_data?: unknown;
+  lat?: number;
+  lon?: number;
+  location?: string;
 }
 
 export interface StatsData {
   total_predictions: number;
   crop_breakdown: { crop: string; cnt: number }[];
-  recent_predictions: { class_name: string; confidence: number; timestamp: string }[];
+  recent_predictions: {
+    class_name: string;
+    display_name?: string;
+    crop?: string;
+    confidence: number;
+    severity?: string;
+    timestamp: string;
+  }[];
 }
 
 export interface ReportRequest {
