@@ -287,6 +287,34 @@ def update_prediction(pred_id: int, user_id: str, payload: dict) -> bool:
     return True
 
 
+def get_prediction_thumbnail(pred_id: int, user_id: str) -> bytes | None:
+    """Decode stored image_data (data URL) into raw JPEG bytes."""
+    import base64
+
+    con = _conn()
+    cur = _execute(
+        con,
+        "SELECT image_data FROM predictions WHERE id = ? AND user_id = ?",
+        (pred_id, user_id),
+    )
+    row = _fetchone(cur)
+    con.close()
+    raw = (row or {}).get("image_data") or ""
+    if not raw:
+        return None
+    raw = str(raw).strip()
+    if raw.startswith("data:"):
+        try:
+            _header, _sep, b64 = raw.partition(",")
+            return base64.b64decode(b64, validate=False)
+        except Exception:
+            return None
+    try:
+        return base64.b64decode(raw, validate=False)
+    except Exception:
+        return None
+
+
 def get_prediction_by_id(pred_id: int, user_id: str) -> dict | None:
     con = _conn()
     cur = _execute(
@@ -323,6 +351,7 @@ def _hydrate_prediction_row(d: dict) -> dict:
     d["plant_json"] = _safe_json_loads(d.get("plant_json"), None)
     d["weather_json"] = _safe_json_loads(d.get("weather_json"), None)
     d["scan_report_json"] = _safe_json_loads(d.get("scan_report_json"), None)
+    d["has_thumbnail"] = bool(str(d.get("image_data") or "").strip())
     return d
 
 

@@ -78,6 +78,7 @@ async def root():
             "GET  /api/history",
             "GET  /api/stats",
             "PUT  /api/predictions/{id}",
+            "GET  /api/predictions/{id}/thumbnail",
             "GET  /api/model-status",
         ],
     }

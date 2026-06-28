@@ -8,6 +8,7 @@ import LocationBar from "@/components/LocationBar";
 import IotSensorUpload from "@/components/IotSensorUpload";
 import { IotSensorData } from "@/lib/iotData";
 import { fileToPersistedImageUrl } from "@/lib/persistImage";
+import { resolvePredictionImageUrl } from "@/lib/predictionImage";
 import { Upload, Loader2, CheckCircle2, Circle, Leaf, RotateCcw } from "lucide-react";
 
 interface Props {
@@ -37,13 +38,24 @@ export default function HomeHub({ lang, loadedLog, onNewScan }: Props) {
   const runningRef = useRef(false);
 
   useEffect(() => {
-    if (loadedLog) {
-      setActiveLog(loadedLog);
+    if (!loadedLog) return;
+    setActiveLog(loadedLog);
+    setIotData(loadedLog.iotData ?? null);
+    setStepStatus(PIPELINE.map(() => "done"));
+    setError("");
+    if (loadedLog.imageUrl) {
       setPreview(loadedLog.imageUrl);
-      setIotData(loadedLog.iotData ?? null);
-      setStepStatus(PIPELINE.map(() => "done"));
-      setError("");
+      return;
     }
+    let cancelled = false;
+    resolvePredictionImageUrl(loadedLog.backendId, loadedLog.imageUrl).then((url) => {
+      if (cancelled || !url) return;
+      setPreview(url);
+      setActiveLog((prev) => (prev ? { ...prev, imageUrl: url } : prev));
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [loadedLog]);
 
   const setStep = useCallback((idx: number, status: StepStatus) => {

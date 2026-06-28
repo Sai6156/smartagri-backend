@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { ScanLog } from "@/lib/scanLog";
+import { resolvePredictionImageUrl } from "@/lib/predictionImage";
 import CropReportDownload from "@/components/CropReportDownload";
 import { stripReportMarkdown } from "@/lib/formatReport";
 import {
@@ -22,11 +23,19 @@ interface Props {
 
 export default function ScanResultsView({ log, isArchive }: Props) {
   const p = log.prediction;
+  const [imageSrc, setImageSrc] = useState("");
   const [imageBroken, setImageBroken] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     setImageBroken(false);
-  }, [log.imageUrl]);
+    resolvePredictionImageUrl(log.backendId, log.imageUrl).then((url) => {
+      if (!cancelled) setImageSrc(url);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [log.imageUrl, log.backendId]);
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
@@ -42,9 +51,9 @@ export default function ScanResultsView({ log, isArchive }: Props) {
       <div className="card card-glow overflow-hidden">
         <div className="grid md:grid-cols-2 gap-6 items-center">
           <div className="rounded-xl overflow-hidden bg-gray-900 border border-white/5 min-h-[12rem] flex items-center justify-center">
-            {log.imageUrl && !imageBroken ? (
+            {imageSrc && !imageBroken ? (
               <img
-                src={log.imageUrl}
+                src={imageSrc}
                 alt="Leaf scan"
                 className="w-full max-h-72 object-contain"
                 onError={() => setImageBroken(true)}

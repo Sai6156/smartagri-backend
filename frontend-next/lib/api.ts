@@ -138,6 +138,21 @@ export const api = {
       body: JSON.stringify(payload),
     }),
 
+  predictionThumbnail: async (id: number): Promise<Blob> => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 60000);
+    try {
+      const res = await fetch(`${BASE}/api/predictions/${id}/thumbnail`, {
+        headers: authHeader(),
+        signal: controller.signal,
+      });
+      if (!res.ok) throw new Error("Thumbnail not found");
+      return res.blob();
+    } finally {
+      clearTimeout(timer);
+    }
+  },
+
   // ── AI Report / Risk ─────────────────────────────────────────────────
   generateReport: (payload: ReportRequest) =>
     req<{ report: string; weather: WeatherData }>("/api/report/generate", {
@@ -283,6 +298,7 @@ export interface HistoryEntry {
   dataset_prediction?: DatasetPrediction | null;
   report?: string;
   image_data?: string;
+  has_thumbnail?: boolean;
   plant_json?: PlantIDResult | null;
   weather_json?: WeatherData | null;
   scan_report_json?: ScanReportJson | null;
