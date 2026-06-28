@@ -71,11 +71,13 @@ export default function CropReport({ lang: _lang, speechLang }: Props) {
           <div className="bg-gray-800 rounded-xl p-4 flex gap-4 items-center">
             {scan.imageUrl && <img src={scan.imageUrl} alt="latest scan" className="w-24 h-20 object-cover rounded-lg" />}
             <div className="flex-1">
-              <p className="text-xs text-green-400 uppercase tracking-wide font-semibold">Using latest scan</p>
+              <p className="text-xs text-blue-400 uppercase tracking-wide font-semibold">Latest AI diagnosis</p>
               <h3 className="font-bold text-white">{pred.display_name}</h3>
               <p className="text-gray-500 text-sm">{pred.crop} · {pred.confidence.toFixed(1)}% · {pred.severity}</p>
-              {pred.visual_diagnosis?.[0] && (
-                <p className="text-blue-300 text-xs mt-1">Gemma top visual possibility: {pred.visual_diagnosis[0].disease}</p>
+              {pred.dataset_prediction && (
+                <p className="text-green-400/80 text-xs mt-1">
+                  Dataset reference: {pred.dataset_prediction.display_name} ({pred.dataset_prediction.confidence.toFixed(1)}%)
+                </p>
               )}
             </div>
           </div>

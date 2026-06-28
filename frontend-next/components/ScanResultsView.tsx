@@ -1,4 +1,5 @@
 "use client";
+import { useEffect, useState } from "react";
 import { ScanLog } from "@/lib/scanLog";
 import CropReportDownload from "@/components/CropReportDownload";
 import { stripReportMarkdown } from "@/lib/formatReport";
@@ -6,7 +7,9 @@ import {
   Microscope, Cloud, AlertTriangle,
   Thermometer, Droplets, Wind, Sparkles, Cpu,
 } from "lucide-react";
+import SecondaryPredictionsGrid from "@/components/SecondaryPredictionsGrid";
 import IotDataPanel from "@/components/IotDataPanel";
+import { ImageOff } from "lucide-react";
 
 const SEV_BADGE: Record<string, string> = {
   High: "badge-high", Medium: "badge-medium", Low: "badge-low", None: "badge-none",
@@ -19,6 +22,11 @@ interface Props {
 
 export default function ScanResultsView({ log, isArchive }: Props) {
   const p = log.prediction;
+  const [imageBroken, setImageBroken] = useState(false);
+
+  useEffect(() => {
+    setImageBroken(false);
+  }, [log.imageUrl]);
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
@@ -33,11 +41,25 @@ export default function ScanResultsView({ log, isArchive }: Props) {
       {/* Hero */}
       <div className="card card-glow overflow-hidden">
         <div className="grid md:grid-cols-2 gap-6 items-center">
-          <div className="rounded-xl overflow-hidden bg-gray-900 border border-white/5">
-            <img src={log.imageUrl} alt="Leaf scan" className="w-full max-h-72 object-contain" />
+          <div className="rounded-xl overflow-hidden bg-gray-900 border border-white/5 min-h-[12rem] flex items-center justify-center">
+            {log.imageUrl && !imageBroken ? (
+              <img
+                src={log.imageUrl}
+                alt="Leaf scan"
+                className="w-full max-h-72 object-contain"
+                onError={() => setImageBroken(true)}
+              />
+            ) : (
+              <div className="flex flex-col items-center gap-2 text-gray-600 py-10">
+                <ImageOff className="w-10 h-10" />
+                <span className="text-xs">Image no longer available</span>
+              </div>
+            )}
           </div>
           <div>
-            <p className="text-xs text-green-400 uppercase tracking-widest font-semibold mb-1">Disease Detection</p>
+            <p className="text-xs text-blue-400 uppercase tracking-widest font-semibold mb-1 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5" /> AI Visual Diagnosis
+            </p>
             <h2 className="text-2xl font-bold text-white font-serif">{p.display_name_translated || p.display_name}</h2>
             <p className="text-gray-400 mt-1">{p.crop}</p>
             <div className="flex flex-wrap gap-2 mt-4">
@@ -49,29 +71,7 @@ export default function ScanResultsView({ log, isArchive }: Props) {
         </div>
       </div>
 
-      {/* Visual AI */}
-      {p.visual_diagnosis?.length > 0 && (
-        <section className="card border-blue-900/40">
-          <h3 className="font-semibold text-white flex items-center gap-2 mb-3">
-            <Sparkles className="w-4 h-4 text-blue-400" /> AI Visual Second Opinion
-          </h3>
-          <div className="grid sm:grid-cols-2 gap-3">
-            {p.visual_diagnosis.slice(0, 4).map((v, i) => (
-              <div key={i} className="bg-gray-900/80 rounded-xl p-3 border border-blue-900/30">
-                <div className="flex justify-between gap-2">
-                  <p className="text-sm font-medium text-white">{v.disease}</p>
-                  <span className="text-xs text-blue-300">{v.confidence.toFixed(0)}%</span>
-                </div>
-                <p className="text-xs text-gray-500 mt-1">{v.crop_if_visible}</p>
-                <p className="text-xs text-gray-400 mt-2">{v.visual_reason}</p>
-                {v.immediate_action && (
-                  <p className="text-xs text-green-300 mt-2">{v.immediate_action}</p>
-                )}
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
+      <SecondaryPredictionsGrid prediction={p} />
 
       {/* Remedies row */}
       <div className="grid md:grid-cols-2 gap-4">

@@ -1,5 +1,6 @@
 import { PredictResult, PlantIDResult, WeatherData } from "@/lib/api";
 import { IotSensorData } from "@/lib/iotData";
+import { isPersistedImageUrl } from "@/lib/persistImage";
 
 export interface ScanLog {
   id: string;
@@ -20,10 +21,19 @@ export interface ScanLog {
 const LOGS_KEY = "sa_scan_logs";
 const MAX_LOGS = 25;
 
+function normalizeImageUrl(url?: string): string {
+  if (!url || !isPersistedImageUrl(url)) return "";
+  return url;
+}
+
 export function loadScanLogs(): ScanLog[] {
   if (typeof window === "undefined") return [];
   try {
-    return JSON.parse(localStorage.getItem(LOGS_KEY) || "[]") as ScanLog[];
+    const logs = JSON.parse(localStorage.getItem(LOGS_KEY) || "[]") as ScanLog[];
+    return logs.map((log) => ({
+      ...log,
+      imageUrl: normalizeImageUrl(log.imageUrl),
+    }));
   } catch {
     return [];
   }
@@ -68,6 +78,7 @@ export function scanLogFromHistoryEntry(
     prevention: string;
     top5: { class: string; confidence: number }[];
     visual_diagnosis: PredictResult["visual_diagnosis"];
+    dataset_prediction?: PredictResult["dataset_prediction"];
     class_name: string;
     report?: string;
   },
@@ -105,6 +116,7 @@ export function scanLogFromHistoryEntry(
       prevention: entry.prevention,
       top5: entry.top5,
       visual_diagnosis: entry.visual_diagnosis || [],
+      dataset_prediction: entry.dataset_prediction ?? null,
       prediction_id: entry.id,
       user_id: "",
     },

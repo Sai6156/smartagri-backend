@@ -10,6 +10,21 @@ from backend.db import save_prediction
 router = APIRouter(prefix="/api", tags=["prediction"])
 
 
+def _severity_from_confidence(conf: float) -> str:
+    if conf >= 70:
+        return "High"
+    if conf >= 40:
+        return "Medium"
+    return "Low"
+
+
+def _clean_crop(crop: str, fallback: str) -> str:
+    c = (crop or "").strip()
+    if not c or c.lower() in ("unknown", "n/a", "not visible", "unclear"):
+        return fallback
+    return c
+
+
 @router.post("/predict")
 async def predict_disease(
     file: UploadFile = File(...),
@@ -48,8 +63,8 @@ async def predict_disease(
         model_prediction=info["display_name"],
     )
 
-    # Translate output if requested
-    translated_name = translate_disease_name(info["display_name"], lang)
+    # Translate dataset strings if requested (kept for dataset_prediction box)
+    translated_dataset_name = translate_disease_name(info["display_name"], lang)
     remedies        = info["remedies"]
     fertilizers     = info["fertilizers"]
     prevention      = info["prevention"]
@@ -61,20 +76,65 @@ async def predict_disease(
         prevention  = translate_dynamic(prevention, lang)
         description = translate_dynamic(description, lang)
 
+    dataset_prediction = {
+        "class_name": class_name,
+        "display_name": info["display_name"],
+        "display_name_translated": translated_dataset_name,
+        "crop": info["crop"],
+        "confidence": result["confidence"],
+        "severity": info["severity"],
+        "description": description,
+        "remedies": remedies,
+        "fertilizers": fertilizers,
+        "prevention": prevention,
+        "top5": result["top5"],
+    }
+
+    # Primary fields: LLM visual top-1 (feeds reports, chat, history hero)
+    llm_top = visual_diagnosis[0] if visual_diagnosis else None
+    if llm_top:
+        primary_name = str(llm_top.get("disease", info["display_name"]))
+        primary_crop = _clean_crop(str(llm_top.get("crop_if_visible", "")), info["crop"])
+        primary_conf = float(llm_top.get("confidence", 0) or 0)
+        primary_desc = str(llm_top.get("visual_reason", "") or description)
+        action = str(llm_top.get("immediate_action", "") or "").strip()
+        primary_remedies = [action] if action else remedies
+        primary_severity = _severity_from_confidence(primary_conf)
+        primary_prevention = action or prevention
+
+        if lang != "en":
+            primary_name_translated = translate_dynamic(primary_name, lang)
+            primary_desc = translate_dynamic(primary_desc, lang)
+            primary_remedies = [translate_dynamic(r, lang) for r in primary_remedies]
+            primary_prevention = translate_dynamic(primary_prevention, lang)
+        else:
+            primary_name_translated = primary_name
+    else:
+        primary_name = info["display_name"]
+        primary_name_translated = translated_dataset_name
+        primary_crop = info["crop"]
+        primary_conf = result["confidence"]
+        primary_desc = description
+        primary_remedies = remedies
+        primary_severity = info["severity"]
+        primary_prevention = prevention
+        dataset_prediction = None
+
     prediction = {
         "class_name":     class_name,
-        "display_name":   info["display_name"],
-        "display_name_translated": translated_name,
-        "crop":           info["crop"],
-        "confidence":     result["confidence"],
-        "severity":       info["severity"],
-        "severity_label": translate_label(info["severity"], lang),
-        "description":    description,
-        "remedies":       remedies,
+        "display_name":   primary_name,
+        "display_name_translated": primary_name_translated,
+        "crop":           primary_crop,
+        "confidence":     primary_conf,
+        "severity":       primary_severity,
+        "severity_label": translate_label(primary_severity, lang),
+        "description":    primary_desc,
+        "remedies":       primary_remedies,
         "fertilizers":    fertilizers,
-        "prevention":     prevention,
+        "prevention":     primary_prevention,
         "top5":           result["top5"],
         "visual_diagnosis": visual_diagnosis,
+        "dataset_prediction": dataset_prediction,
         "filename":       file.filename,
         "user_id":        user_id,
         "language":       lang,

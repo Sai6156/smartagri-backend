@@ -7,6 +7,7 @@ import ScanResultsView from "@/components/ScanResultsView";
 import LocationBar from "@/components/LocationBar";
 import IotSensorUpload from "@/components/IotSensorUpload";
 import { IotSensorData } from "@/lib/iotData";
+import { fileToPersistedImageUrl } from "@/lib/persistImage";
 import { Upload, Loader2, CheckCircle2, Circle, Leaf, RotateCcw } from "lucide-react";
 
 interface Props {
@@ -166,15 +167,19 @@ export default function HomeHub({ lang, loadedLog, onNewScan }: Props) {
     }
   }
 
-  function handleFile(file: File) {
+  async function handleFile(file: File) {
     if (!file.type.startsWith("image/")) {
       setError("Please upload an image file.");
       return;
     }
     onNewScan?.();
-    const url = URL.createObjectURL(file);
-    setPreview(url);
-    void runPipeline(file, url, iotData);
+    try {
+      const url = await fileToPersistedImageUrl(file);
+      setPreview(url);
+      void runPipeline(file, url, iotData);
+    } catch {
+      setError("Could not read that image. Try another file.");
+    }
   }
 
   function handleReset() {

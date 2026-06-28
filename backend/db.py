@@ -52,6 +52,7 @@ def init_db():
         "description": "TEXT",
         "visual_diagnosis": "TEXT",
         "report": "TEXT",
+        "dataset_prediction": "TEXT",
     }.items():
         try:
             cur.execute(f"ALTER TABLE predictions ADD COLUMN {col} {typ}")
@@ -68,8 +69,8 @@ def save_prediction(pred: dict):
         INSERT INTO predictions
             (user_id, timestamp, filename, class_name, display_name, crop,
              confidence, severity, remedies, fertilizers, prevention, description, top5,
-             visual_diagnosis, report)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             visual_diagnosis, report, dataset_prediction)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         pred.get("user_id", "anonymous"),
         datetime.utcnow().isoformat(),
@@ -86,6 +87,7 @@ def save_prediction(pred: dict):
         json.dumps(pred.get("top5", [])),
         json.dumps(pred.get("visual_diagnosis", [])),
         pred.get("report", ""),
+        json.dumps(pred.get("dataset_prediction") or {}),
     ))
     pred_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
     con.commit()
@@ -112,6 +114,8 @@ def get_history(limit: int = 50, user_id: str = "") -> list[dict]:
         d["fertilizers"] = json.loads(d["fertilizers"] or "[]")
         d["top5"]        = json.loads(d["top5"] or "[]")
         d["visual_diagnosis"] = json.loads(d.get("visual_diagnosis") or "[]")
+        raw_ds = json.loads(d.get("dataset_prediction") or "{}")
+        d["dataset_prediction"] = raw_ds if raw_ds else None
         result.append(d)
     return result
 

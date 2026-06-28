@@ -62,7 +62,7 @@ export default function RiskForecaster({ lang: _lang, speechLang }: Props) {
       const loc = await resolveLocation();
       const res = await api.riskForecast(crop, loc.lat, loc.lon, location || loc.city);
       const context = scan?.result
-        ? `Latest leaf scan context: dataset model predicted ${scan.result.display_name} (${scan.result.confidence.toFixed(1)}%). Gemma visual top possibility: ${scan.result.visual_diagnosis?.[0]?.disease || "not available"}.\n\n`
+        ? `Latest leaf scan — primary AI diagnosis: ${scan.result.display_name} (${scan.result.confidence.toFixed(1)}% on ${scan.result.crop}).\n\n`
         : "";
       setForecast(context + res.forecast);
     } catch (e: unknown) {

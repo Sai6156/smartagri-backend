@@ -22,20 +22,24 @@ export function loadLastScan(): LastScan | null {
 /** Text context injected into every chat/voice prompt when a scan is attached. */
 export function buildScanContext(scan: LastScan): string {
   const r = scan.result;
-  const visual = (r.visual_diagnosis || [])
-    .slice(0, 3)
-    .map((v) => `${v.disease} (${v.confidence}%): ${v.visual_reason}`)
+  const alternates = (r.visual_diagnosis || [])
+    .slice(1, 4)
+    .map((v) => `${v.disease} (${v.confidence}%)`)
     .join("; ");
+  const dataset = r.dataset_prediction;
 
   return [
     "LEAF SCAN ALREADY COMPLETED — do NOT ask the farmer to upload or attach a photo.",
+    `Primary AI visual diagnosis: ${r.display_name} (${r.confidence.toFixed(1)}% confidence)`,
     `Crop: ${r.crop}`,
-    `Disease: ${r.display_name} (${r.confidence.toFixed(1)}% confidence)`,
     `Severity: ${r.severity}`,
     `Description: ${r.description}`,
     `Remedies: ${r.remedies.join(", ")}`,
     `Prevention: ${r.prevention}`,
-    visual ? `Visual AI second opinion: ${visual}` : "",
+    alternates ? `Other AI possibilities: ${alternates}` : "",
+    dataset
+      ? `Dataset model reference: ${dataset.display_name} (${dataset.confidence.toFixed(1)}% on PlantVillage classes)`
+      : "",
     scan.timestamp ? `Scanned: ${new Date(scan.timestamp).toLocaleString()}` : "",
     formatIotContext(scan.iotData),
   ]

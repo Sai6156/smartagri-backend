@@ -6,6 +6,7 @@ import { VoiceListenSession, voiceTurnFromSession, speakText, stopAudio } from "
 import { LANGUAGES } from "@/lib/languages";
 import PageHeader from "@/components/PageHeader";
 import DashboardStats from "@/components/DashboardStats";
+import SecondaryPredictionsGrid from "@/components/SecondaryPredictionsGrid";
 import {
   Upload, Loader2, Volume2, Mic,
   Play, Pause, StopCircle, MessageCircle, X, RefreshCw,
@@ -352,75 +353,39 @@ export default function DiseaseDetector({ lang, speechLang, userName }: Props) {
               {/* Result tab */}
               {activeTab === "result" && (
                 <div className="space-y-3">
-                  <div className="rounded-xl border border-green-900/70 bg-green-950/20 p-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-green-400 mb-2">Dataset model result we trained on</p>
+                  <div className="rounded-xl border border-blue-900/70 bg-blue-950/20 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-blue-400 mb-2">AI Visual Diagnosis</p>
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <h3 className="font-bold text-white text-lg leading-tight">
+                        <h3 className="font-bold text-white text-xl leading-tight">
                           {result.display_name_translated || result.display_name}
                         </h3>
-                        <p className="text-gray-500 text-xs mt-0.5">{result.display_name}</p>
+                        <p className="text-gray-500 text-xs mt-0.5">{result.crop}</p>
                       </div>
                       <span className={SEV_BADGE[result.severity] || "badge-none"}>
                         {result.severity}
                       </span>
                     </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-gray-800 rounded-lg p-3">
-                      <p className="text-xs text-gray-500">Crop</p>
-                      <p className="font-medium text-white">{result.crop}</p>
-                    </div>
-                    <div className="bg-gray-800 rounded-lg p-3">
-                      <p className="text-xs text-gray-500">Confidence</p>
-                      <p className="font-medium text-green-400">{result.confidence.toFixed(1)}%</p>
-                    </div>
-                  </div>
-
-                  {/* Confidence bar */}
-                  <div className="bg-gray-800 rounded-full h-2">
-                    <div
-                      className="bg-green-500 h-2 rounded-full transition-all"
-                      style={{ width: `${result.confidence}%` }}
-                    />
-                  </div>
-
-                  <p className="text-gray-400 text-sm">{result.description}</p>
-
-                  {result.top5?.length > 0 && (
-                    <div className="bg-gray-800/70 rounded-xl p-3">
-                      <p className="text-xs font-semibold text-gray-300 mb-2 uppercase tracking-wide">Dataset Top Matches</p>
-                      <div className="space-y-1.5">
-                        {result.top5.slice(0, 5).map((m, i) => (
-                          <div key={i} className="flex items-center justify-between gap-3 text-xs">
-                            <span className="text-gray-300 truncate">{m.class}</span>
-                            <span className="text-green-400 font-medium">{Number(m.confidence).toFixed(1)}%</span>
-                          </div>
-                        ))}
+                    <div className="grid grid-cols-2 gap-3 mt-3">
+                      <div className="bg-gray-800 rounded-lg p-3">
+                        <p className="text-xs text-gray-500">Confidence</p>
+                        <p className="font-medium text-blue-400">{result.confidence.toFixed(1)}%</p>
+                      </div>
+                      <div className="bg-gray-800 rounded-lg p-3">
+                        <p className="text-xs text-gray-500">Source</p>
+                        <p className="font-medium text-white text-sm">Gemma vision</p>
                       </div>
                     </div>
-                  )}
-
-                  {result.visual_diagnosis?.length > 0 && (
-                    <div className="rounded-xl border border-blue-900/70 bg-blue-950/20 p-3">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-blue-300 mb-2">Gemma visual second opinion (not limited to dataset)</p>
-                      <div className="space-y-2">
-                        {result.visual_diagnosis.slice(0, 4).map((v, i) => (
-                          <div key={i} className="bg-gray-900/70 rounded-lg p-2">
-                            <div className="flex items-center justify-between gap-2">
-                              <p className="font-medium text-gray-100 text-sm">{i + 1}. {v.disease}</p>
-                              <span className="text-blue-300 text-xs">{Number(v.confidence).toFixed(0)}%</span>
-                            </div>
-                            <p className="text-xs text-[#5a6b60]">{v.crop_if_visible} · {v.type}</p>
-                            <p className="text-xs text-gray-400 mt-1">{v.visual_reason}</p>
-                            {v.immediate_action && <p className="text-xs text-green-300 mt-1">Action: {v.immediate_action}</p>}
-                          </div>
-                        ))}
-                      </div>
-                      <p className="text-[11px] text-gray-500 mt-2">Use this when model confidence is low or the leaf/crop is outside the training dataset.</p>
+                    <div className="bg-gray-800 rounded-full h-2 mt-3">
+                      <div
+                        className="bg-blue-500 h-2 rounded-full transition-all"
+                        style={{ width: `${Math.min(result.confidence, 100)}%` }}
+                      />
                     </div>
-                  )}
+                    <p className="text-gray-400 text-sm mt-3">{result.description}</p>
+                  </div>
+
+                  <SecondaryPredictionsGrid prediction={result} />
 
                   {result.remedies.length > 0 && (
                     <div>

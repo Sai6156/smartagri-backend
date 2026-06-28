@@ -8,6 +8,31 @@ interface Props {
   onOpenLog: (log: ScanLog) => void;
 }
 
+function ScanThumbnail({ imageUrl }: { imageUrl: string }) {
+  const [broken, setBroken] = useState(false);
+
+  useEffect(() => {
+    setBroken(false);
+  }, [imageUrl]);
+
+  if (!imageUrl || broken) {
+    return (
+      <div className="w-14 h-14 rounded-lg bg-gray-800 flex items-center justify-center flex-shrink-0">
+        <ImageOff className="w-5 h-5 text-gray-600" />
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={imageUrl}
+      alt=""
+      className="w-14 h-14 rounded-lg object-cover bg-gray-800 flex-shrink-0"
+      onError={() => setBroken(true)}
+    />
+  );
+}
+
 export default function HistoryStats({ onOpenLog }: Props) {
   const [localLogs, setLocalLogs] = useState<ScanLog[]>([]);
   const [stats, setStats] = useState<StatsData | null>(null);
@@ -87,17 +112,7 @@ export default function HistoryStats({ onOpenLog }: Props) {
                   className="w-full text-left rounded-xl border border-gray-800 bg-gray-900/60 hover:bg-gray-800/80 hover:border-green-800/50 p-3 transition-all group"
                 >
                   <div className="flex items-center gap-3">
-                    {log.imageUrl ? (
-                      <img
-                        src={log.imageUrl}
-                        alt=""
-                        className="w-14 h-14 rounded-lg object-cover bg-gray-800 flex-shrink-0"
-                      />
-                    ) : (
-                      <div className="w-14 h-14 rounded-lg bg-gray-800 flex items-center justify-center flex-shrink-0">
-                        <ImageOff className="w-5 h-5 text-gray-600" />
-                      </div>
-                    )}
+                    <ScanThumbnail imageUrl={log.imageUrl} />
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-gray-100 truncate">
                         {p.display_name_translated || p.display_name}

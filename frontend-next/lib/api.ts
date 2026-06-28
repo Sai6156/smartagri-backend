@@ -155,6 +155,29 @@ export const api = {
 };
 
 // ── Types ──────────────────────────────────────────────────────────────────
+export interface VisualDiagnosis {
+  disease: string;
+  crop_if_visible: string;
+  type: string;
+  confidence: number;
+  visual_reason: string;
+  immediate_action: string;
+}
+
+export interface DatasetPrediction {
+  class_name: string;
+  display_name: string;
+  display_name_translated: string;
+  crop: string;
+  confidence: number;
+  severity: string;
+  description: string;
+  remedies: string[];
+  fertilizers: string[];
+  prevention: string;
+  top5: { class: string; confidence: number }[];
+}
+
 export interface PredictResult {
   class_name: string;
   display_name: string;
@@ -168,17 +191,9 @@ export interface PredictResult {
   prevention: string;
   top5: { class: string; confidence: number }[];
   visual_diagnosis: VisualDiagnosis[];
+  dataset_prediction?: DatasetPrediction | null;
   prediction_id?: number;
   user_id: string;
-}
-
-export interface VisualDiagnosis {
-  disease: string;
-  crop_if_visible: string;
-  type: string;
-  confidence: number;
-  visual_reason: string;
-  immediate_action: string;
 }
 
 export interface ExplainRequest {
@@ -245,6 +260,7 @@ export interface HistoryEntry {
   description: string;
   top5: { class: string; confidence: number }[];
   visual_diagnosis: VisualDiagnosis[];
+  dataset_prediction?: DatasetPrediction | null;
   report?: string;
 }
 
