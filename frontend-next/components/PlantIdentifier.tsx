@@ -1,6 +1,7 @@
 ﻿"use client";
 import { useEffect, useState } from "react";
 import { api, PlantIDResult } from "@/lib/api";
+import { loadLastScan } from "@/lib/scanContext";
 import { Upload, Loader2, Leaf, Link as LinkIcon } from "lucide-react";
 
 interface Props { lang: string; }
@@ -23,16 +24,11 @@ export default function PlantIdentifier({ lang: _lang }: Props) {
   const [hasScanContext, setHasScanContext] = useState(false);
 
   useEffect(() => {
-    const raw = localStorage.getItem("sa_last_scan");
-    if (!raw) return;
-    try {
-      const latest = JSON.parse(raw);
-      if (latest.imageUrl?.startsWith("data:")) {
-        setPreview(latest.imageUrl);
-        setFile(dataUrlToFile(latest.imageUrl));
-        setHasScanContext(true);
-      }
-    } catch {}
+    const latest = loadLastScan();
+    if (!latest?.imageUrl?.startsWith("data:")) return;
+    setPreview(latest.imageUrl);
+    setFile(dataUrlToFile(latest.imageUrl));
+    setHasScanContext(true);
   }, []);
 
   async function identify() {

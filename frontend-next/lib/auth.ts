@@ -8,6 +8,7 @@ export interface User {
 export function saveUser(user: User): void {
   localStorage.setItem("sa_token", user.token);
   localStorage.setItem("sa_user", JSON.stringify(user));
+  window.dispatchEvent(new Event("sa-user-changed"));
 }
 
 export function getUser(): User | null {
@@ -19,7 +20,7 @@ export function getUser(): User | null {
 export function logout(): void {
   localStorage.removeItem("sa_token");
   localStorage.removeItem("sa_user");
-  localStorage.removeItem("sa_lang");
+  window.dispatchEvent(new Event("sa-user-changed"));
 }
 
 export function getToken(): string {

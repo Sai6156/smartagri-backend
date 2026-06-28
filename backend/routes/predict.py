@@ -6,6 +6,7 @@ from backend.services.plantnet_api import identify_plant as plantnet_identify
 from backend.services.translator import translate_disease_name, translate_label, translate_dynamic
 from backend.services.llm import visual_disease_possibilities
 from backend.db import save_prediction
+from backend.routes.auth import get_current_user
 
 router = APIRouter(prefix="/api", tags=["prediction"])
 
@@ -35,14 +36,8 @@ async def predict_disease(
     if not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image.")
 
-    user_id = "anonymous"
-    if authorization.startswith("Bearer "):
-        try:
-            from backend.routes.auth import decode_token
-            payload = decode_token(authorization.split(" ", 1)[1])
-            user_id = payload.get("user_id", "anonymous")
-        except Exception:
-            pass
+    user = get_current_user(authorization)
+    user_id = user["user_id"]
 
     image_bytes = await file.read()
     if len(image_bytes) > 10 * 1024 * 1024:

@@ -42,11 +42,15 @@ export default function HistoryStats({ onOpenLog }: Props) {
     const refresh = () => setLocalLogs(loadScanLogs());
     refresh();
     window.addEventListener("sa-scan-logs-updated", refresh);
+    window.addEventListener("sa-user-changed", refresh);
     api.stats()
       .then(setStats)
       .catch(() => setStats(null))
       .finally(() => setLoading(false));
-    return () => window.removeEventListener("sa-scan-logs-updated", refresh);
+    return () => {
+      window.removeEventListener("sa-scan-logs-updated", refresh);
+      window.removeEventListener("sa-user-changed", refresh);
+    };
   }, []);
 
   const displayLogs = useMemo(() => {

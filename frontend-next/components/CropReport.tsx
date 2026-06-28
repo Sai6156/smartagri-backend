@@ -3,15 +3,9 @@ import { useEffect, useState } from "react";
 import { api, PredictResult, ReportRequest } from "@/lib/api";
 import { TTSPlayer } from "@/lib/speech";
 import { FileText, Loader2, Volume2, RefreshCw } from "lucide-react";
+import { loadLastScan } from "@/lib/scanContext";
 
 interface Props { lang: string; speechLang: string; }
-
-function loadLastScan(): { result: PredictResult; imageUrl?: string; timestamp?: string } | null {
-  if (typeof window === "undefined") return null;
-  const raw = localStorage.getItem("sa_last_scan");
-  if (!raw) return null;
-  try { return JSON.parse(raw); } catch { return null; }
-}
 
 export default function CropReport({ lang: _lang, speechLang }: Props) {
   const [scan, setScan] = useState<{ result: PredictResult; imageUrl?: string; timestamp?: string } | null>(null);

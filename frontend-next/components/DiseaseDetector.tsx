@@ -7,6 +7,7 @@ import { LANGUAGES } from "@/lib/languages";
 import PageHeader from "@/components/PageHeader";
 import DashboardStats from "@/components/DashboardStats";
 import SecondaryPredictionsGrid from "@/components/SecondaryPredictionsGrid";
+import { saveLastScan } from "@/lib/scanContext";
 import {
   Upload, Loader2, Volume2, Mic,
   Play, Pause, StopCircle, MessageCircle, X, RefreshCw,
@@ -79,12 +80,11 @@ export default function DiseaseDetector({ lang, speechLang, userName }: Props) {
       const res = await api.predict(file, lang);
       setResult(res);
       if (preview) {
-        localStorage.setItem("sa_last_scan", JSON.stringify({
+        saveLastScan({
           result: res,
           imageUrl: preview,
           timestamp: new Date().toISOString(),
-        }));
-        window.dispatchEvent(new Event("sa-last-scan-updated"));
+        });
       }
       setActiveTab("result");
     } catch (e: unknown) {

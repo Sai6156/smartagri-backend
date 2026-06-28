@@ -9,12 +9,7 @@ const CROPS = ["Tomato", "Potato", "Pepper", "Corn", "Wheat", "Rice", "Apple", "
 
 interface Props { lang: string; speechLang: string; }
 
-function loadLastScan(): { result: PredictResult; imageUrl?: string } | null {
-  if (typeof window === "undefined") return null;
-  const raw = localStorage.getItem("sa_last_scan");
-  if (!raw) return null;
-  try { return JSON.parse(raw); } catch { return null; }
-}
+import { loadLastScan } from "@/lib/scanContext";
 
 export default function RiskForecaster({ lang: _lang, speechLang }: Props) {
   const [crop, setCrop] = useState("Tomato");

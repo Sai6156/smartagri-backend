@@ -46,6 +46,14 @@ def init_db():
             message     TEXT,
             status      TEXT
         );
+
+        CREATE TABLE IF NOT EXISTS users (
+            id            TEXT PRIMARY KEY,
+            email         TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL,
+            name          TEXT NOT NULL DEFAULT '',
+            created_at    TEXT NOT NULL
+        );
     """)
     for col, typ in {
         "prevention": "TEXT",
@@ -96,16 +104,13 @@ def save_prediction(pred: dict):
 
 
 def get_history(limit: int = 50, user_id: str = "") -> list[dict]:
+    if not user_id:
+        return []
     con = _conn()
-    if user_id:
-        rows = con.execute(
-            "SELECT * FROM predictions WHERE user_id=? ORDER BY id DESC LIMIT ?",
-            (user_id, limit),
-        ).fetchall()
-    else:
-        rows = con.execute(
-            "SELECT * FROM predictions ORDER BY id DESC LIMIT ?", (limit,)
-        ).fetchall()
+    rows = con.execute(
+        "SELECT * FROM predictions WHERE user_id=? ORDER BY id DESC LIMIT ?",
+        (user_id, limit),
+    ).fetchall()
     con.close()
     result = []
     for row in rows:
@@ -121,9 +126,15 @@ def get_history(limit: int = 50, user_id: str = "") -> list[dict]:
 
 
 def get_stats(user_id: str = "") -> dict:
-    con   = _conn()
-    where = "WHERE user_id=?" if user_id else ""
-    args  = (user_id,) if user_id else ()
+    if not user_id:
+        return {
+            "total_predictions": 0,
+            "crop_breakdown": [],
+            "recent_predictions": [],
+        }
+    con = _conn()
+    where = "WHERE user_id=?"
+    args = (user_id,)
     total  = con.execute(f"SELECT COUNT(*) FROM predictions {where}", args).fetchone()[0]
     crops  = con.execute(
         f"SELECT crop, COUNT(*) as cnt FROM predictions {where} GROUP BY crop ORDER BY cnt DESC",

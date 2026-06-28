@@ -1,5 +1,7 @@
 import { PredictResult } from "@/lib/api";
+import { getUser } from "@/lib/auth";
 import { formatIotContext, IotSensorData } from "@/lib/iotData";
+import { userStorageKey } from "@/lib/userStorage";
 
 export interface LastScan {
   result: PredictResult;
@@ -9,14 +11,20 @@ export interface LastScan {
 }
 
 export function loadLastScan(): LastScan | null {
-  if (typeof window === "undefined") return null;
-  const raw = localStorage.getItem("sa_last_scan");
+  if (typeof window === "undefined" || !getUser()) return null;
+  const raw = localStorage.getItem(userStorageKey("sa_last_scan"));
   if (!raw) return null;
   try {
     return JSON.parse(raw) as LastScan;
   } catch {
     return null;
   }
+}
+
+export function saveLastScan(scan: LastScan): void {
+  if (typeof window === "undefined" || !getUser()) return;
+  localStorage.setItem(userStorageKey("sa_last_scan"), JSON.stringify(scan));
+  window.dispatchEvent(new Event("sa-last-scan-updated"));
 }
 
 /** Text context injected into every chat/voice prompt when a scan is attached. */

@@ -19,7 +19,18 @@ async function req<T>(path: string, opts: RequestInit = {}, timeoutMs = 90000): 
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ detail: res.statusText }));
-      throw new Error(err.detail || "Request failed");
+      const detail = err.detail;
+      const message =
+        typeof detail === "string"
+          ? detail
+          : Array.isArray(detail)
+            ? detail.map((d: { msg?: string }) => d.msg).filter(Boolean).join(", ")
+            : "Request failed";
+      if (res.status === 401 && typeof window !== "undefined") {
+        localStorage.removeItem("sa_token");
+        localStorage.removeItem("sa_user");
+      }
+      throw new Error(message || "Request failed");
     }
     return res.json();
   } catch (e) {
@@ -50,9 +61,10 @@ export const api = {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password, name: "" }),
+          body: JSON.stringify({ email, password }),
         }
       ),
+    me: () => req<{ user_id: string; email: string; name: string }>("/api/auth/me"),
   },
 
   // ── Predict ──────────────────────────────────────────────────────────

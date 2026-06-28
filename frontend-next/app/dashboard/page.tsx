@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { getUser, logout } from "@/lib/auth";
+import { getUser, logout, saveUser } from "@/lib/auth";
+import { api } from "@/lib/api";
 import { SPEECH_LANG_MAP } from "@/lib/speech";
 import { ScanLog } from "@/lib/scanLog";
 import LanguageSelector from "@/components/LanguageSelector";
@@ -30,11 +31,23 @@ export default function Dashboard() {
   const [loadedLog, setLoadedLog] = useState<ScanLog | null>(null);
 
   useEffect(() => {
-    const u = getUser();
-    if (!u) { router.replace("/"); return; }
-    setUser(u);
-    const saved = localStorage.getItem("sa_lang");
-    if (saved) setLang(saved);
+    const local = getUser();
+    if (!local?.token) {
+      router.replace("/");
+      return;
+    }
+    api.auth
+      .me()
+      .then((profile) => {
+        saveUser({ ...local, ...profile, token: local.token });
+        setUser(profile);
+        const saved = localStorage.getItem("sa_lang");
+        if (saved) setLang(saved);
+      })
+      .catch(() => {
+        logout();
+        router.replace("/");
+      });
   }, [router]);
 
   const handleLangChange = useCallback((l: string) => {

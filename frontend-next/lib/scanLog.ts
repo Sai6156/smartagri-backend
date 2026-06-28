@@ -1,6 +1,8 @@
 import { PredictResult, PlantIDResult, WeatherData } from "@/lib/api";
+import { getUser } from "@/lib/auth";
 import { IotSensorData } from "@/lib/iotData";
 import { isPersistedImageUrl } from "@/lib/persistImage";
+import { userStorageKey } from "@/lib/userStorage";
 
 export interface ScanLog {
   id: string;
@@ -18,8 +20,17 @@ export interface ScanLog {
   iotData?: IotSensorData | null;
 }
 
-const LOGS_KEY = "sa_scan_logs";
+const LOGS_BASE = "sa_scan_logs";
+const LAST_SCAN_BASE = "sa_last_scan";
 const MAX_LOGS = 25;
+
+function logsKey(): string {
+  return userStorageKey(LOGS_BASE);
+}
+
+function lastScanKey(): string {
+  return userStorageKey(LAST_SCAN_BASE);
+}
 
 function normalizeImageUrl(url?: string): string {
   if (!url || !isPersistedImageUrl(url)) return "";
@@ -27,9 +38,9 @@ function normalizeImageUrl(url?: string): string {
 }
 
 export function loadScanLogs(): ScanLog[] {
-  if (typeof window === "undefined") return [];
+  if (typeof window === "undefined" || !getUser()) return [];
   try {
-    const logs = JSON.parse(localStorage.getItem(LOGS_KEY) || "[]") as ScanLog[];
+    const logs = JSON.parse(localStorage.getItem(logsKey()) || "[]") as ScanLog[];
     return logs.map((log) => ({
       ...log,
       imageUrl: normalizeImageUrl(log.imageUrl),
@@ -40,11 +51,12 @@ export function loadScanLogs(): ScanLog[] {
 }
 
 export function saveScanLog(log: ScanLog): void {
+  if (!getUser()) return;
   const logs = loadScanLogs().filter((l) => l.id !== log.id);
   logs.unshift(log);
-  localStorage.setItem(LOGS_KEY, JSON.stringify(logs.slice(0, MAX_LOGS)));
+  localStorage.setItem(logsKey(), JSON.stringify(logs.slice(0, MAX_LOGS)));
   localStorage.setItem(
-    "sa_last_scan",
+    lastScanKey(),
     JSON.stringify({
       result: log.prediction,
       imageUrl: log.imageUrl,
@@ -118,7 +130,7 @@ export function scanLogFromHistoryEntry(
       visual_diagnosis: entry.visual_diagnosis || [],
       dataset_prediction: entry.dataset_prediction ?? null,
       prediction_id: entry.id,
-      user_id: "",
+      user_id: getUser()?.user_id || "",
     },
     cropReport: extra.cropReport,
     weather: extra.weather ?? null,

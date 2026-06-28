@@ -7,6 +7,7 @@ import {
   loadLastScan,
   buildScanContext,
   stripMarkdownForSpeech,
+  saveLastScan,
   LastScan,
 } from "@/lib/scanContext";
 import {
@@ -41,7 +42,11 @@ export default function Chatbot({ lang }: Props) {
   useEffect(() => {
     refreshScan();
     window.addEventListener("sa-last-scan-updated", refreshScan);
-    return () => window.removeEventListener("sa-last-scan-updated", refreshScan);
+    window.addEventListener("sa-user-changed", refreshScan);
+    return () => {
+      window.removeEventListener("sa-last-scan-updated", refreshScan);
+      window.removeEventListener("sa-user-changed", refreshScan);
+    };
   }, [refreshScan]);
 
   useEffect(() => {
@@ -99,8 +104,7 @@ export default function Chatbot({ lang }: Props) {
         imageUrl,
         timestamp: new Date().toISOString(),
       };
-      localStorage.setItem("sa_last_scan", JSON.stringify(scan));
-      window.dispatchEvent(new Event("sa-last-scan-updated"));
+      saveLastScan(scan);
       setAttachedScan(scan);
       setUseScanContext(true);
     } catch {

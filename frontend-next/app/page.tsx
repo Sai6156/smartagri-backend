@@ -24,10 +24,11 @@ export default function AuthPage() {
     setError("");
     setLoading(true);
     try {
+      const trimmedEmail = email.trim().toLowerCase();
       const res = mode === "signup"
-        ? await api.auth.signup(email, password, name)
-        : await api.auth.login(email, password);
-      saveUser({ ...res, name: res.name || name });
+        ? await api.auth.signup(trimmedEmail, password, name.trim())
+        : await api.auth.login(trimmedEmail, password);
+      saveUser({ ...res, name: res.name || name.trim() });
       router.replace("/dashboard");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
